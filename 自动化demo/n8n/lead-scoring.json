@@ -1,0 +1,221 @@
+{
+  "name": "客户线索自动分级 v1",
+  "nodes": [
+    {
+      "parameters": {
+        "path": "lead-v2",
+        "httpMethod": "POST",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "webhook-1",
+      "name": "接收线索",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -220,
+        300
+      ],
+      "webhookId": "lead-intake"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 清洗：把各种来源的字段统一\n// 注意：返回对象的【顶层】字段值如果长得像表达式，n8n 会再求值一次，可能被污染\n// 所以这里统一塞进一个 payload 里，下游只读 payload.xxx\nconst raw = $input.first().json.body ?? $input.first().json;\nconst txt = s => String(s ?? '').replace(/<[^>]+>/g,' ').replace(/\\s+/g,' ').trim().slice(0,4000);\nconst email = String(raw.email ?? raw.contact_email ?? '').toLowerCase().match(/[\\w.+-]+@[\\w-]+\\.[\\w.-]+/)?.[0] ?? '';\nconst phone = String(raw.phone ?? raw.contact_phone ?? '').replace(/\\D/g,'').replace(/^86(?=\\d{11}$)/,'');\nreturn [{ json: { payload: {\n  source: String(raw.source ?? 'unknown').toLowerCase(),\n  contact_name: txt(raw.name ?? raw.contact_name),\n  contact_email: email,\n  contact_phone: phone,\n  message: txt(raw.message ?? raw.content ?? raw.body),\n  budget_raw: raw.budget ?? null,\n  raw_payload: JSON.stringify(raw)\n}} }];"
+      },
+      "id": "clean-1",
+      "name": "① 清洗",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 去重 + 分流：算指纹、查重、给出显式开关 route，不让 n8n 自己\"猜\"走哪条边\n// 逐字段赋值，避免顶层字段值被 n8n 二次当成表达式求值\nconst hash = s => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0).toString(16).padStart(8, '0'); };\n\nconst store = $getWorkflowStaticData('global');\nif (!store.seen) store.seen = {};\nconst now = Date.now(), TTL = 7 * 24 * 3600 * 1000;\nfor (const k of Object.keys(store.seen)) if (now - store.seen[k] > TTL) delete store.seen[k];\n\nconst p = $input.first().json.payload;\nconst key = (p.contact_email || p.contact_phone || '') + '|' + (p.message || '').replace(/\\s+/g, '').toLowerCase();\nconst fp = hash(key);\nconst isDup = Object.prototype.hasOwnProperty.call(store.seen, fp);\nif (!isDup) store.seen[fp] = now;\n\nconst out = { payload: p };\nout.fingerprint = String(fp);\nout.route = isDup ? 'dup' : 'new';\nreturn [{ json: out }];"
+      },
+      "id": "dedup-1",
+      "name": "② 去重判断",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        440,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "r-dup",
+                    "leftValue": "={{ $json.route }}",
+                    "rightValue": "dup",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "重复"
+            }
+          ]
+        },
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "新线索"
+        }
+      },
+      "id": "sw1",
+      "name": "③ 分流",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "position": [
+        660,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 打分：纯规则，零成本、可解释、可复现。规则都写成数组，客户能自己改\nconst j = $input.first().json;\nconst p = j.payload;\n// 字段名各家表单都不一样：显式取四个别名，别只认一种\nconst pName  = p.contact_name || p.name || p.姓名 || '';\nconst pMsg   = p.message || p.content || p.body || p.remark || p.留言 || '';\nconst pEmail = p.contact_email || p.email || '';\nconst pPhone = p.contact_phone || p.phone || p.tel || '';\nconst pBudgetRaw = p.budget_raw ?? p.budget ?? p.预算 ?? '';\nconst text = ((pMsg||'') + ' ' + (pName||'')).toLowerCase();\nconst HIGH=['报价','多少钱','怎么收费','合同','签约','采购','下单','什么时候能开始','开发票','开票','预算','付款方式','quotation','pricing','how much','contract','invoice'];\nconst MID=['了解一下','咨询','对比','怎么样','有什么功能','看看','demo','演示','试用','案例'];\nconst SPAM=['seo服务','代开发票','刷单','加微信领','免费领取','博彩','贷款','点击链接','中奖','兼职日结'];\nconst IND={'制造':['工厂','产能','车间','制造','factory'],'电商':['店铺','sku','上架','电商','shopify'],'教育':['课程','学员','招生','培训'],'医疗':['诊所','门诊','患者','医院','clinic'],'法律':['律所','案件','诉讼','律师'],'房产':['楼盘','中介','房源','房产']};\n\nconst out = { payload: p };\nout.fingerprint = j.fingerprint;\n\nlet spamHit = null;\nfor (const s of SPAM) if (text.includes(s)) { spamHit = '命中垃圾词：' + s; break; }\nif (!spamHit && pEmail.split('@')[1] === 'mailinator.com') spamHit = '一次性邮箱';\n\n// 从留言正文里抠预算。客户常常写在正文里而不是填框，\n// 但要先剔掉手机号——否则\"电话13800138000\"会被当成 138 亿预算。\nfunction budgetFromText(s0) {\n  if (!s0) return null;\n  let s = String(s0).replace(/[,¥￥]/g,'');\n  s = s.replace(/1[3-9]\\d{9}/g,' ').replace(/\\b\\d{7,}\\b/g,' ')\n       .replace(/\\d{4}[-/年]\\d{1,2}[-/月]\\d{1,2}/g,' ')\n       .replace(/[a-zA-Z]{0,3}\\d{8,}[a-zA-Z0-9]*/g,' ');\n  let m = s.match(/(?:预算|报价|费用|价格|价位|出价|准备|投入|能出|大概|最多|不超过|控制在|范围)[^0-9]{0,6}(\\d+(?:\\.\\d+)?)\\s*(万|w|千|k|元|块)?/i);\n  if (m) {\n    const num = parseFloat(m[1]);\n    const u = (m[2]||'').toLowerCase();\n    let mult = 1;\n    if (u === '万' || u === 'w') mult = 10000;\n    else if (u === '千' || u === 'k') mult = 1000;\n    // 没单位：1–2 位数按千算（\"预算15\"→1.5万），\"预算500\"就是 500 元\n    else if (!u) mult = num < 100 ? 1000 : 1;\n    const n = Math.round(num * mult);\n    if (n > 0) return n;\n  }\n  m = s.match(/(\\d+(?:\\.\\d+)?)\\s*(万|w|千|k)(?![a-z])/i);\n  if (m) return Math.round(parseFloat(m[1]) * (['万','w'].includes(m[2].toLowerCase()) ? 10000 : 1000));\n  return null;\n}\n\n// 预算：输入框优先，没有就从正文抠\nlet budget = null, budgetFromBody = false;\nconst br = String(pBudgetRaw).replace(/[,¥￥]/g,'').trim().toLowerCase();\nif (br) {\n  let mult = 1, t = br;\n  if (/[万w]$/.test(br)) { mult = 10000; t = br.slice(0,-1); }\n  else if (/k$/.test(br)) { mult = 1000; t = br.slice(0,-1); }\n  const m = t.match(/\\d+(\\.\\d+)?/);\n  if (m) budget = Math.round(parseFloat(m[0]) * mult);\n}\nif (budget === null) {\n  const bt = budgetFromText(pMsg);\n  if (bt !== null) { budget = bt; budgetFromBody = true; }\n}\n\nif (spamHit) {\n  out.ai_score = 0; out.ai_intent = 'spam'; out.ai_reason = spamHit; out.needs_review = false;\n  out.budget_yuan = null; out.industry = null;\n  return [{ json: out }];\n}\n\nlet score = 0; const why = [];\nconst hitHighWords = HIGH.filter(w=>text.includes(w));\nconst hitHigh = hitHighWords.length > 0;\nif (hitHigh) {\n  // 命中 2 个以上强意向词 = 客户已经在问细节，不是路过问价\n  score += 45 + (hitHighWords.length >= 2 ? 10 : 0);\n  why.push('强意向词：' + hitHighWords.slice(0,3).join('、'));\n}\nelse { const m = MID.filter(w=>text.includes(w)); if (m.length) { score += 30; why.push('中等意向：' + m.slice(0,2).join('、')); } }\n\nif (budget !== null) {\n  const src = budgetFromBody ? '（正文识别）' : '';\n  if (budget >= 5000) { score += 25; why.push('预算明确 ≥5000 元' + src); }\n  else if (budget >= 1000) { score += 10; why.push('预算 1000–5000 元' + src); }\n  // 扣 25：否则\"预算800 + 问报价\"能靠强意向分冲到 warm\n  else { score -= 25; why.push('预算过低（' + budget + ' 元），大概率不是目标客户' + src); }\n}\n\n// 行业是加分项不是门槛：命中 +15，未命中轻扣 5（行业不对成交率低，但不一票否决）\nlet industry = null;\nfor (const k of Object.keys(IND)) {\n  if (IND[k].some(w=>text.includes(w))) { industry = k; score += 15; why.push('目标行业：'+k); break; }\n}\n// 有强意向时只轻扣 2：行业对不上但意图明确，那是要马上回的人\nif (industry === null) { score += hitHigh ? -2 : -5; why.push('行业未命中（不在预设 6 个行业里）'); }\n\n// 名/邮箱/电话/留言 四项；name+phone+message 三项齐的客户信息已够用\nconst filled = [pName, pEmail, pPhone, pMsg].filter(Boolean).length;\nif (filled >= 3) { score += 10; why.push('联系方式齐全（' + filled + '/4 项）'); }\nelse if (filled <= 1) {\n  // 强意向的线索没留电话是正常的，刚问报价的人不会一上来交底；\n  // 中等意向（问了案例/功能）也算有明确需求，只轻扣；完全没意向词才重扣\n  let pen;\n  if (hitHigh) { pen = -5; why.push('还没留联系方式（但意向明确，优先回他）'); }\n  else if (MID.some(w => text.includes(w))) { pen = -8; why.push('没留联系方式（在问了，值得追一句）'); }\n  else { pen = -20; why.push('联系方式严重缺失'); }\n  score += pen;\n}\nif ((pMsg||'').length < 10 && !hitHigh) { score -= 15; why.push('消息过短'); }\n\n// 预算不到 5000 元绝不可能是高意向，硬封顶在 warm（65）\n// 只靠扣分压不住：强意向 55 + 中意向…冲得到 70 以上\nif (budget !== null && budget < 5000) score = Math.min(score, 65);\n\nscore = Math.max(0, Math.min(100, score));\n\nout.budget_yuan = budget;\nout.industry = industry;\nout.ai_score = score;\nout.ai_intent = score >= 70 ? 'hot' : (score >= 35 ? 'warm' : 'cold');\nout.ai_reason = why.join('；') || '无匹配规则';\n// 复核：卡在分级线边上 / 高分没预算 / 三条以上强意向词要人扫一眼\nout.needs_review = (\n  Math.abs(score-35)<=2 ||\n  Math.abs(score-70)<=2 ||\n  (score>=70 && budget===null) ||\n  hitHighWords.length >= 3\n);"
+      },
+      "id": "score-1",
+      "name": "④ 打分（零成本规则）",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 路由：hot 给在手最少且行业对口的销售；垃圾直接归档\nconst reps = [\n  {id:1, name:'销售A', active:2, industries:null},\n  {id:2, name:'销售B', active:0, industries:['医疗','法律']},\n  {id:3, name:'销售C', active:5, industries:['电商','制造']}\n];\nconst j = $input.first().json;\nconst p = j.payload;\nconst out = { payload: p };\nout.fingerprint = j.fingerprint;\nout.budget_yuan = j.budget_yuan;\nout.industry = j.industry;\nout.ai_score = j.ai_score;\nout.ai_intent = j.ai_intent;\nout.ai_reason = j.ai_reason;\nout.needs_review = j.needs_review;\n\nif (j.ai_intent === 'spam') {\n  out.owner_id = null; out.owner_name = null; out.status = 'junk';\n  out.route_note = '垃圾线索，直接归档';\n  return [{ json: out }];\n}\nlet cands = reps.filter(r => !r.industries || j.industry === null || r.industries.includes(j.industry));\nif (!cands.length) cands = reps;\ncands.sort((a,b) => a.active - b.active);\nconst pick = cands[0];\nout.owner_id = pick.id;\nout.owner_name = pick.name;\nout.status = j.ai_intent === 'hot' ? 'qualified' : 'new';\nout.route_note = '分配给 ' + pick.name + '（在手 ' + pick.active + ' 条）';\nreturn [{ json: out }];"
+      },
+      "id": "route-1",
+      "name": "⑤ 分配销售",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 汇总：这条就是能给客户看的日报。分钟数按每条人工 8 分钟估（可调）\n// webhook 单条触发时 $input.all() 只有 1 条，所以\"累计\"只能放工作流静态数据\nconst j = $input.first().json;\nconst p = j.payload;\nconst intent = j.ai_intent;\n\nconst store = $getWorkflowStaticData('global');\nif (!store.stats) store.stats = { total:0, hot:0, warm:0, cold:0, spam:0, auto_assigned:0, needs_review:0 };\nconst s = store.stats;\ns.total += 1;\nif (intent) s[intent] += 1;\nif (j.owner_id) s.auto_assigned += 1;\nif (j.needs_review) s.needs_review += 1;\n\nconst out = {};\nout.generated_at = new Date().toISOString();\nout.this_lead = { name: p.contact_name, email: p.contact_email, message: p.message,\n                  score: j.ai_score, intent: intent, industry: j.industry,\n                  budget_yuan: j.budget_yuan, owner: j.owner_name, status: j.status,\n                  reason: j.ai_reason, needs_review: j.needs_review };\nout.total = s.total;\nout.hot = s.hot; out.warm = s.warm; out.cold = s.cold; out.spam = s.spam;\nout.auto_assigned = s.auto_assigned;\nout.needs_review = s.needs_review;\nout.minutes_saved = (s.total - s.cold - s.spam) * 8;\nout.ai_cost_yuan = 0;\nout.note = '规则打分，未调用任何付费 API，成本 0；total 为累计值';\nreturn [{ json: out }];"
+      },
+      "id": "report-1",
+      "name": "⑥ 生成日报",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1100,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $input.first().json.payload;\nconst out = { status: 'duplicate_skipped' };\nout.message = '重复线索，已跳过';\nout.received = p.message;\nout.fingerprint = String($input.first().json.fingerprint ?? '');\nreturn [{ json: out }];"
+      },
+      "id": "dup-1",
+      "name": "重复→跳过",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        660,
+        440
+      ]
+    }
+  ],
+  "connections": {
+    "接收线索": {
+      "main": [
+        [
+          {
+            "node": "① 清洗",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "① 清洗": {
+      "main": [
+        [
+          {
+            "node": "② 去重判断",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "④ 打分（零成本规则）": {
+      "main": [
+        [
+          {
+            "node": "⑤ 分配销售",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "⑤ 分配销售": {
+      "main": [
+        [
+          {
+            "node": "⑥ 生成日报",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "② 去重判断": {
+      "main": [
+        [
+          {
+            "node": "③ 分流",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "③ 分流": {
+      "main": [
+        [
+          {
+            "node": "重复→跳过",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "④ 打分（零成本规则）",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "active": true
+}
