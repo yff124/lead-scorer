@@ -264,7 +264,8 @@ function extractBudgetFromText(text){
     else if(unit === '千' || unit === 'k') mult = 1000;
     else if(!unit){
       // 没单位：三位以内按千算（"预算15"通常指 1.5 万），否则按元
-      mult = num < 1000 ? 1000 : 1;
+      // 1–2 位数按千算（"预算15"→1.5万）；"预算500"就是 500 元
+      mult = num < 100 ? 1000 : 1;
     }
     const n = Math.round(num * mult);
     if(n > 0) return n;
@@ -332,13 +333,18 @@ function evaluate(d){
   const hitHigh = R_high.filter(w => text.includes(w));
   const hitMid  = R_mid.filter(w => text.includes(w));
   if(hitHigh.length){
-    out.score += 45;
+    // 命中 2 个以上强意向词 = 客户已经在问细节，不是路过问价，多给 10 分
+    const bonus = hitHigh.length >= 2 ? 10 : 0;
+    const val = 45 + bonus;
+    out.score += val;
     out.reasons.push('强意向词 ' + hitHigh.length + ' 个：' + hitHigh.slice(0,3).join('、'));
-    out.steps.push({lab:'强意向词 ×' + hitHigh.length, val:45});
+    out.steps.push({lab:'强意向词 ×' + hitHigh.length, val: val});
   } else if(hitMid.length){
-    out.score += 20;
+    // 30 分：刚好差一点到 warm，配上行业/预算任一正信号就进 warm。
+    // 给 20 分的话中等意向永远进不了 warm，"中等"这档形同虚设。
+    out.score += 30;
     out.reasons.push('中等意向：' + hitMid.slice(0,2).join('、'));
-    out.steps.push({lab:'中等意向词', val:20});
+    out.steps.push({lab:'中等意向词', val:30});
   } else {
     out.steps.push({lab:'意向词', val:0});
   }
@@ -350,10 +356,12 @@ function evaluate(d){
     if(b >= 5000){ out.score += 25; out.reasons.push('预算明确 ≥5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算充足', val:25}); }
     else if(b >= 1000){ out.score += 10; out.reasons.push('预算 1000–5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算中等', val:10}); }
     else {
-      // 预算低于 1000 元：很可能不是目标客户，明确告知，别让人空欢喜
-      out.score -= 15;
+      // 预算低于 1000 元：很可能不是目标客户，明确告知，别让人空欢喜。
+      // 扣 25（不是 15）：否则"预算800 + 问报价"能靠强意向分冲到 warm，
+      // 客户会问"800 块的活你也让我打电话？"
+      out.score -= 25;
       out.reasons.push('预算只有 ' + b + ' 元，差距较大' + budSrc);
-      out.steps.push({lab:'预算过低', val:-15, neg:true});
+      out.steps.push({lab:'预算过低', val:-25, neg:true});
       out.lowBudget = true;
     }
   } else {
@@ -371,6 +379,11 @@ function evaluate(d){
     }
   }
 
+  // 预算不到 5000 元不可能是高意向：硬封顶在 warm（65）。
+  // 客户说"小程序多少钱，预算1200"——问得清楚，但这点钱做不了我们的活。
+  // 只靠扣分压不住（45+10 强意向 + 30 中意向就冲上去了）。
+  if(out.budget && out.budget < 5000) out.score = Math.min(out.score, 65);
+
   // 行业：选了具体行业就用它的 signals 判断；没选就扫通用行业表
   let ind = null;
   if(IR){
@@ -382,7 +395,13 @@ function evaluate(d){
   }
   out.industry = ind;
   if(ind){ out.score += 15; out.reasons.push('目标行业：' + ind); out.steps.push({lab:'行业匹配', val:15}); }
-  else out.steps.push({lab:'行业', val:0});
+  else {
+    // 行业是加分项不是门槛：没命中轻扣，有强意向时更轻（那是要马上回的人）
+    const pen = hitHigh.length ? -2 : -5;
+    out.score += pen;
+    out.reasons.push('行业未命中（不在预设行业里）');
+    out.steps.push({lab:'行业未命中', val: pen, neg:true});
+  }
 
   // 完整度：分项框 + 正文里识别到 都算
   // 注意：强意向线索还没留电话是正常的（刚问报价的人不会一上来就交底），
@@ -392,7 +411,8 @@ function evaluate(d){
   const hasPhone = !!(d.phone && String(d.phone).trim()) || !!out.contacts.phone || !!out.contacts.wechat;
   const hasMsg   = !!(d.message && String(d.message).trim());
   const filled = [hasName, hasEmail, hasPhone, hasMsg].filter(Boolean).length;
-  if(filled === 4){ out.score += 10; out.reasons.push('四项联系方式齐全'); out.steps.push({lab:'信息完整', val:10}); }
+  // 名+电话+留言 三项齐，成交信息其实已经够了，不该卡在"必须四项"
+  if(filled >= 3){ out.score += 10; out.reasons.push('联系方式齐全（' + filled + '/4 项）'); out.steps.push({lab:'信息完整', val:10}); }
   else if(!hasPhone && !hasEmail){
     const penalty = hitHigh.length ? -5 : -15;
     out.score += penalty;
@@ -407,8 +427,15 @@ function evaluate(d){
   }
 
   out.score = Math.max(0, Math.min(100, out.score));
-  out.intent = out.score >= 70 ? 'hot' : (out.score >= 35 ? 'warm' : 'cold');
-  out.needsReview = (out.score >= 35 && out.score <= 50) || (out.score >= 70 && b === null);
+  if(out.spam){ out.intent = 'spam'; }
+  else out.intent = out.score >= 70 ? 'hot' : (out.score >= 35 ? 'warm' : 'cold');
+  // 复核只标"真拿不准"的：卡在分级线上、或高分没预算、或 3 条以上强意向词。
+  // 原来 35–50 整段都标复核，实测 300 条里四成要人看，那不叫辅助，那叫把活推回给人。
+  const _hh = (hitHigh && hitHigh.length) || 0;
+  out.needsReview = Math.abs(out.score - 35) <= 2
+    || Math.abs(out.score - 70) <= 2
+    || (out.score >= 70 && b === null)
+    || _hh >= 3;
   return out;
 }
 
