@@ -31,7 +31,7 @@ em{color:var(--dim)}
  code{background:#222936} blockquote{background:#1a2532;color:#c8d4e2}
  pre{background:#0e1116}
 }
-</style></head><body><div class="wrap">
+</style></head><body><article>
 <h1>How much does n8n actually cost? (2026, with real numbers)</h1>
 <p>Most posts answering this just screenshot n8n's pricing page. That's not the question people are asking. The question is <em>"what will this cost me, in total, once it's running?"</em></p>
 <p>I self-host n8n and run a production workflow on it. Here's the real bill.</p>
@@ -273,6 +273,19 @@ Only if you choose to call an LLM. The platform itself never requires one.</p>
 </table>
 <p>If someone quotes you a big number for "n8n licensing", they're either selling Cloud Business or they haven't looked. The money in this category isn't in the platform — it's in the nine hours of debugging that the platform's documentation doesn't prepare you for.</p>
 <hr />
-<p><em>I build these workflows and publish the tests. The lead-scoring pipeline referenced above is open: <a href="https://github.com/yff124/lead-scorer">github.com/yff124/lead-scorer</a> — live demo at <a href="https://yff124.github.io/lead-scorer/">yff124.github.io/lead-scorer</a>.</em></p>
-<div class="foot">Written October 2026 · numbers from an actual self-hosted instance, not a pricing page.</div>
-</div></body></html>
+<h2>Don't take my word for it — run the tests</h2>
+<p>The lead-scoring pipeline above is open. One command, nothing to install beyond <code>node</code> and <code>python3</code>:</p>
+<pre><code class="language-bash">curl -sL https://yff124.github.io/lead-scorer/自检.sh | bash
+</code></pre>
+<p>It downloads the files to a temp directory and runs 6 suites:</p>
+<pre><code>Web regression (budget / contact / tiering)     22 passed / 0 failed
+Web industry vocabularies (6 verticals)         20 passed / 0 failed
+Python core selftest                            all passed
+n8n vs Python cross-check                       tiers match 17/17
+300-lead stress test                            all passed
+Three-engine agreement (web/Python/n8n)         match 18/18
+</code></pre>
+<p><strong>Why I bothered:</strong> the real risk with a rule-based system isn't that it's dumb. It's that you change one rule, break three others, and nobody notices — a customer's messages get mis-scored for three months and you never find out.</p>
+<p>So I wrote the same rules three times (browser JS, Python core, n8n node) and cross-check the <strong>tier</strong> each one assigns across 18 leads. One mismatch and the check fails. That habit is the most valuable part of the nine hours.</p>
+<p>Live demo: <a href="https://yff124.github.io/lead-scorer/">yff124.github.io/lead-scorer</a> — code: <a href="https://github.com/yff124/lead-scorer">github.com/yff124/lead-scorer</a>.</p>
+</article></body></html>
