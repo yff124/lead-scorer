@@ -1,7 +1,5 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
-<head>
-<meta charset="utf-8">
+<html lang="zh-CN"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>n8n 到底要花多少钱？（2026 实测账本）</title>
 <meta name="description" content="n8n 自托管的真实成本账：授权 €0，服务器约 60 元/月，每条线索处理成本 0 元。附与 Cloud 的盈亏平衡点和 9 小时调试时间账。">
@@ -34,11 +32,8 @@ em{color:var(--dim)}
  code{background:#222936} blockquote{background:#1a2532;color:#c8d4e2}
  pre{background:#0e1116}
 }
-</style>
-</head>
-<body>
-<article>
-<h1 id="n8n-2026">n8n 到底要花多少钱？（2026 版，附实测账本）</h1>
+</style></head><body><article>
+<h1>n8n 到底要花多少钱？（2026 版，附实测账本）</h1>
 <p>搜这个问题的人，八成看到的是同一张截图：官网定价页，几个欧元数字。</p>
 <p>但那不是你想问的。你真正想知道的是：<strong>这东西跑起来以后，一个月从我卡上扣多少钱？</strong></p>
 <p>我自己自托管跑了一条生产工作流，下面是真实的账单。</p>
@@ -46,7 +41,7 @@ em{color:var(--dim)}
 <p><strong>先说结论</strong>：月执行量 3000 次以内、工作流不调大模型的话，自托管成本<strong>几乎是零</strong>（一台 60 块/月的云服务器，或者一台闲着的旧电脑）。真正贵的是<strong>你调试花掉的时间</strong>，不是授权费。</p>
 </blockquote>
 <hr />
-<h2 id="2026-10">一、官方价格（2026 年 10 月）</h2>
+<h2>一、官方价格（2026 年 10 月）</h2>
 <table>
 <thead>
 <tr>
@@ -93,7 +88,7 @@ em{color:var(--dim)}
 <p><strong>第一，社区版不限执行次数。</strong> Cloud 按执行次数收费，自托管按服务器收费。一旦你的月执行量过了几千次，这个区别就是全部。</p>
 <p><strong>第二，“执行”指整条工作流跑一遍，不是单个节点。</strong> n8n 不按节点收费。一个 30 个节点的工作流，算 1 次执行。</p>
 <hr />
-<h2 id="_1">二、我实际花了多少</h2>
+<h2>二、我实际花了多少</h2>
 <p>我跑的是一条线索分级流水线：webhook 收到线索 → 清洗 → 去重 → 打分 → 分配给销售 → 汇总进每日简报。</p>
 <table>
 <thead>
@@ -131,7 +126,7 @@ em{color:var(--dim)}
 </table>
 <p>最后一行值得单独解释。</p>
 <hr />
-<h2 id="_2">三、这块是别人不会写进比价表的</h2>
+<h2>三、这块是别人不会写进比价表的</h2>
 <p>我那套流水线用的<strong>不是大模型，是确定性规则引擎</strong>。所以处理一条线索的边际成本是精确的零——不发 token、不按次计费、没有速率限制。</p>
 <p>如果同样的活我用大模型做：</p>
 <table>
@@ -168,7 +163,7 @@ em{color:var(--dim)}
 </ul>
 <p>我见过的大部分“AI 自动化”项目，本质是第二种，被包装成了第一种。</p>
 <hr />
-<h2 id="vs-cloud">四、自托管 vs Cloud：盈亏平衡点到底在哪</h2>
+<h2>四、自托管 vs Cloud：盈亏平衡点到底在哪</h2>
 <p>Cloud Starter：€20/月 ÷ 2,500 次 = <strong>每次执行 0.008 欧</strong>。</p>
 <p>一台 60 元/月的服务器，只要你不跑重计算，扛的执行量远不止 2,500 次。所以：</p>
 <table>
@@ -195,7 +190,7 @@ em{color:var(--dim)}
 </table>
 <p>但有一项隐形成本：<strong>运维</strong>。自托管意味着备份、升级、证书、以及“它挂了得有人发现”。如果你不想管这些，那 €20 是值的——我不会为了让自托管显得聪明就去否认这一点。</p>
 <hr />
-<h2 id="_3">五、真正贵的不是授权费</h2>
+<h2>五、真正贵的不是授权费</h2>
 <p>我做完一条生产工作流的真实时间账：</p>
 <table>
 <thead>
@@ -234,12 +229,12 @@ em{color:var(--dim)}
 <p>按一小时 150 元算，<strong>1350 元的时间</strong>，去搭一条月成本 60 块的东西。</p>
 <p>授权费从来不是问题，<strong>调试才是。</strong></p>
 <hr />
-<h2 id="_4">六、比订阅费更贵的三件事</h2>
+<h2>六、比订阅费更贵的三件事</h2>
 <p><strong>1. 静默失败。</strong> 某个节点开始返回 null，不报错。三周后你发现 CRM 里全是空值。从第一天就配错误分支，推到一个你真的会看的群里。</p>
 <p><strong>2. 重复的工作流。</strong> 老版本 n8n 里导入工作流会生成新 ID，旧的那条还在跑。两条工作流监听同一个 webhook 路径，先注册的那条赢。你改的是工作流 #4，实际在处理流量的是 #1，你改什么都没用。这个坑吃了我两小时。</p>
 <p><strong>3. 没有测试。</strong> 手上没有一组固定的“输入 → 期望输出”，每次改动都是赌。我那套就是一个几十行的脚本：喂进去一条，比对输出。够了。</p>
 <hr />
-<h2 id="_5">七、这几个问题我直接答</h2>
+<h2>七、这几个问题我直接答</h2>
 <p><strong>n8n 免费吗？</strong>
 社区版免费，执行次数不限。你付的是服务器钱。</p>
 <p><strong>比 Zapier 便宜吗？</strong>
@@ -251,7 +246,7 @@ em{color:var(--dim)}
 <p><strong>大模型的费用呢？</strong>
 只有你自己选择调它才有。平台本身不强制。</p>
 <hr />
-<h2 id="_6">八、一页账</h2>
+<h2>八、一页账</h2>
 <table>
 <thead>
 <tr>
@@ -281,11 +276,28 @@ em{color:var(--dim)}
 <p>如果有人给你报了个“n8n 授权费”的大数，那他不是在卖 Cloud Business，就是没查过。</p>
 <p>这个赛道的钱不在平台上，<strong>在那九个小时里</strong>——那是文档没法提前告诉你的部分。</p>
 <hr />
-<h2 id="_7">九、别信我，自己验</h2>
+<h2>九、别信我，自己验</h2>
 <p>上面所有数字你都可以自己复现，不用注册、不用装东西：</p>
 <p><strong><a href="https://yff124.github.io/lead-scorer/">yff124.github.io/lead-scorer</a></strong> — 浏览器打开就能用的线索打分器，粘一条客户留言，立刻看到分级、每一分的来源、以及为什么。纯前端，数据不出你的浏览器。</p>
-<p><strong><a href="https://github.com/yff124/lead-scorer">github.com/yff124/lead-scorer</a></strong> — 全套规则和测试都在仓库里，包括 42 条断言和三端对拍脚本。</p>
+<p><strong><a href="https://github.com/yff124/lead-scorer">github.com/yff124/lead-scorer</a></strong> — 全套规则和测试都在仓库里。</p>
+<h3>42 项断言，你自己跑一遍</h3>
+<p>不用 clone、不用装任何包，只要机器上有 <code>node</code> 和 <code>python3</code>：</p>
+<pre><code class="language-bash">curl -sL https://yff124.github.io/lead-scorer/自检.sh | bash
+</code></pre>
+<p>它会自己把文件下到临时目录，跑完 6 套测试，最后打印：</p>
+<pre><code>═══ 网页版回归（预算/联系方式/分级） ═══   22 通过 / 0 失败
+═══ 网页版行业词表（6 个行业）     ═══   20 通过 / 0 失败
+═══ Python 内核自测                ═══   全部通过
+═══ n8n 与 Python 对拍             ═══   分级一致 17/17
+═══ 300 条压力测试                 ═══   全部通过
+═══ 三端一致（网页/Python/n8n）    ═══   三家一致 18/18
+
+全部 6 套自检通过。
+</code></pre>
+<p><strong>为什么值得较这个劲：</strong> 规则类系统真正的风险不是"不够聪明"，而是"改一处、崩一片"，
+而且崩了没人发现——某个客户的话被连续判错三个月，你都不知道。</p>
+<p>所以同一套规则我写了三份实现（网页 JS、Python 内核、n8n 节点），
+然后用 18 条线索对拍三家的<strong>判定档位</strong>。有一条不一致就报错。
+这份工程习惯本身，就是那 9 小时里最值钱的部分。</p>
 <p>判断标准可以公开到这个程度。你去问任何一家做自动化的，看他们敢不敢把打分规则摊开给你看。</p>
-</article>
-</body>
-</html>
+</article></body></html>
