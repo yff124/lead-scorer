@@ -1,70 +1,92 @@
-# 线索自动分级体检
+# Lead Scorer — score an inbound lead in 30 seconds
 
-一条线索进来，30 秒判断：**该不该跟、值多少钱、该派给谁。**
+**Live demo (no signup, no install):** https://yff124.github.io/lead-scorer/
 
-纯前端，零安装，纯本地计算 —— 你输入的数据不会上传到任何服务器。
+Paste a real customer message. Get a score, the reasons behind it, and what to do next.
 
-## 直接试用
+---
 
-打开 https://yff124.github.io/lead-scorer/ ，粘贴一条真实线索，立刻出结果。
+## The problem it solves
 
-## 它解决什么问题
+Small B2B teams treat every inbound lead the same way: *reply and see what happens.*
 
-大多数做 B 端生意的人，线索来了都是同一个动作：**先聊着看**。结果是：
+The result is predictable:
 
-- 打广告引来的"随便问问"占了 70%，销售把时间花在不可能成交的人身上
-- 真正的高意向线索混在列表里，两天后才被翻出来，人已经找了别家
-- 老板问"这批线索质量怎么样"，没人答得上来
+- 70% of inbound is tyre-kickers and spam; sales spends most of its time on people who will never buy
+- The one lead that was ready to pay sits unanswered for two days, then buys elsewhere
+- When the owner asks "how good were last month's leads?", nobody can answer
 
-这个工具把判断标准化：**输入线索原文，输出分数、等级、理由、下一步动作。**
+This tool replaces gut feel with a written, inspectable rule set.
 
-## 判断逻辑
+## What it outputs
 
-不是拍脑袋定的权重，是从真实成交/未成交线索里反推的：
+For each lead: **score (0–100)**, **tier** (hot / warm / cold / spam), **the exact reasons**, and **the next action**.
 
-| 信号类型 | 举例 | 作用 |
-|---|---|---|
-| 高意向词 | 报价、多久能上线、合同、开票、上门演示 | 加分，出现多个直接进 hot |
-| 中意向词 | 了解一下、怎么收费、有资料吗 | 温和加分 |
-| 垃圾信号 | 刷单、代运营、加微信送资料、贷款 | 直接判 spam，不浪费人力 |
-| 预算 | 明说 10 万 / 5 万左右 / 没提 | 有明确预算加 25 分；低于 1000 元明确降级 |
-| 行业匹配 | 医疗、法律、电商、制造、教育、房产 | 命中目标行业加分 |
-| 联系方式 | 有手机/邮箱 vs 只留个昵称 | 缺联系方式扣分；但**强意向不因缺电话被降级** |
+Example:
 
-规则全在 `rules.js` 里，18 个高意向词 / 12 个中意向词 / 13 个垃圾信号 / 6 个行业，**改一改就能适配你自己的行业**。
+```
+Input:  "We run 8 dental clinics, need a CRM, budget around 50k,
+         need a demo this week. What's the contract and invoicing process?
+         Phone 13800138000"
 
-### 两个真实踩过的坑
+Output: 85 / 100 — HOT — call within 5 minutes
+        Strong buying signals ×3: quote, contract, invoice
+        Explicit budget ≥ ¥5,000 (¥50,000, extracted from message body)
+        Target industry: Healthcare
+        Contact detected: phone 13800138000
+```
 
-**坑一：手机号被当成预算。**
-"预算 5 万，电话 13800138000" 一开始被解析成"预算 138 亿"。正则里的数字匹配把手机号吃了。
-修法是在提取金额前先剔掉手机号、7 位以上连号、日期、SKU 编码。
+## Design decisions (and why)
 
-**坑二：高意向却被判成低意向。**
-"想做一套合同审批，报价多少？" 命中两个强意向词，但因为没留电话、消息又短，被扣到 25 分 cold。
-这在业务上是错的 —— 刚问报价的人本来就不会一上来交底。修法是：**有强意向词时，缺联系方式只扣 5 分，不再重罚**。
+**No LLM.** This is a deterministic rule engine. Same input always gives the same score. That matters because:
 
-## 测试
+- Cost is zero — no API bills, ever
+- You can audit every point (the UI shows the full breakdown)
+- It cannot quietly change behaviour after a model update
+
+**Runs entirely in the browser.** No backend, no telemetry, no data leaves the machine. It works offline. That removes the single biggest objection enterprise buyers have about lead data.
+
+**Rules are public.** 18 strong-intent phrases, 12 medium-intent, 13 spam signals, 6 industry dictionaries — all in `rules.js`, all editable. The rules aren't the product. *Tuning them to your industry's actual language* is the product.
+
+## Two bugs I hit, documented
+
+I'm including these because they're the kind of thing that separates a demo from something you'd actually deploy.
+
+**1. Phone numbers parsed as budgets.**
+"Budget 50k, phone 13800138000" was initially read as a ¥13.8 *billion* budget. The amount regex swallowed the phone number.
+Fix: strip phone numbers, 7+ digit runs, dates and SKU codes before extracting currency.
+
+**2. A hot lead scored as cold.**
+"Need a contract approval workflow, what's the price?" matched two strong-intent phrases, but got knocked down to 25/100 because it had no phone number and the message was short.
+That's backwards — someone asking for a price won't hand over their phone number on the first message.
+Fix: when strong-intent phrases are present, missing contact details cost 5 points instead of 20.
+
+Both are covered by regression tests.
+
+## Tests
 
 ```bash
 node regress.js
 ```
 
-22 项断言，覆盖预算提取（含手机号不被误判）、联系方式识别、端到端分级。改任何规则，跑一遍就知道有没有改坏。
+22 assertions: budget extraction (including "phone number must not become a budget"), contact detection, end-to-end tiering.
 
-## 三种用法
+Run it after changing any rule and you'll know immediately whether you broke something.
 
-1. **网页版**（这个仓库）—— 手动粘贴单条，看判断依据，免费
-2. **批量版** —— CSV 进，Excel 出，带颜色标注和汇总表，几百条一次跑完
-3. **自动版** —— 接在表单/webhook 后面，线索进来自动打分、自动分配销售、自动出日报
+## Three delivery tiers
 
-后两种是付费交付的部分，网页版是免费的。
+| Tier | What you get | Use when |
+|---|---|---|
+| **Web** (this repo) | Paste one lead, see the breakdown | Evaluating whether this is useful at all |
+| **Batch** | CSV in → styled Excel out, colour-coded, summary sheet | You have hundreds of old leads to clean up |
+| **Automated** | Hooked to your form/webhook: auto-score, auto-assign to a rep, daily digest | You want this running without anyone touching it |
 
-## 为什么敢公开规则
+The web tier is free and always will be.
 
-因为**规则不值钱，把规则跑起来不值钱，让规则在你自己的业务里跑对才值钱**。
+## Stack
 
-你的成交话术、你的行业黑话、你的销售负载，这些我都不知道。这些才是要调的。
+Plain HTML/CSS/JS. No build step, no dependencies, no framework. The Python rule engine (`score_leads.py`) mirrors the same logic if you want it server-side.
 
-## 隐私
+## Licence
 
-所有计算在你的浏览器里完成。没有后端，没有埋点，没有数据回传。你可以断网后用。
+MIT for the code. The rule dictionaries are examples — replace them with your own industry's vocabulary.
