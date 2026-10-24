@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>线索打分器 · 粘一条客户留言试试</title>
+<style>
+  :root{
+    --ink:#1b2333; --sub:#6b7487; --line:#e6e9f0; --bg:#f6f7fb;
+    --brand:#1f3864; --hot:#c0392b; --warm:#d68910; --cold:#5d7cb5; --spam:#8b93a3;
+    --radius:12px;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,-apple-system,sans-serif;
+    line-height:1.65; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px;margin:0 auto;padding:40px 20px 80px}
+  header{margin-bottom:28px}
+  h1{font-size:26px;margin:0 0 8px;letter-spacing:.5px;color:var(--brand)}
+  .lede{color:var(--sub);font-size:15px;margin:0}
+  .card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:22px;margin-bottom:18px;
+        box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  label{display:block;font-size:13px;color:var(--sub);margin-bottom:8px;font-weight:600;letter-spacing:.3px}
+  textarea,input{width:100%;border:1px solid var(--line);border-radius:9px;padding:12px 14px;
+    font-size:15px;font-family:inherit;color:var(--ink);background:#fcfcfe;outline:none;transition:.15s}
+  textarea:focus,input:focus{border-color:var(--brand);background:#fff;box-shadow:0 0 0 3px rgba(31,56,100,.08)}
+  textarea{min-height:88px;resize:vertical}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  @media(max-width:640px){.row{grid-template-columns:1fr}}
+  .samples{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .samples button{
+    border:1px solid var(--line);background:#fff;color:var(--sub);border-radius:20px;
+    padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s
+  }
+  .samples button:hover{border-color:var(--brand);color:var(--brand);background:#f7f9ff}
+  .go{margin-top:16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .go button.primary{
+    background:var(--brand);color:#fff;border:none;border-radius:10px;padding:12px 30px;
+    font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;letter-spacing:.5px
+  }
+  .go button.primary:hover{background:#16294a}
+  .go button.ghost{background:none;border:1px solid var(--line);color:var(--sub);border-radius:10px;
+    padding:12px 20px;font-size:14px;cursor:pointer;font-family:inherit}
+  .go button.ghost:hover{border-color:var(--brand);color:var(--brand)}
+  .hint{font-size:12.5px;color:var(--sub)}
+
+  /* 结果区 */
+  #out{display:none}
+  .verdict{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .dial{position:relative;width:96px;height:96px;flex:0 0 auto}
+  .dial svg{transform:rotate(-90deg)}
+  .dial .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .dial .num b{font-size:26px;line-height:1}
+  .dial .num span{font-size:11px;color:var(--sub);margin-top:2px}
+  .vtext h2{margin:0 0 4px;font-size:19px}
+  .vtext p{margin:0;color:var(--sub);font-size:14px}
+  .tag{display:inline-block;color:#fff;border-radius:6px;padding:2px 10px;font-size:13px;font-weight:600;
+       margin-right:8px;vertical-align:2px}
+
+  .bars{margin-top:22px;border-top:1px solid var(--line);padding-top:18px}
+  .bar{display:grid;grid-template-columns:112px 1fr 52px;align-items:center;gap:12px;margin-bottom:9px;font-size:13.5px}
+  .bar .lab{color:var(--sub)}
+  .bar .track{display:block;height:8px;background:#eef0f6;border-radius:5px;overflow:hidden}
+  .bar .track{display:block}
+  .bar .fill{display:block;height:100%;border-radius:5px;width:0;transition:width .55s cubic-bezier(.22,1,.36,1)}
+  .bar .val{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .bar.neg .val{color:var(--hot)}
+
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:20px}
+  .kv div{background:#f8f9fd;border:1px solid var(--line);border-radius:9px;padding:11px 14px}
+  .kv .k{font-size:11.5px;color:var(--sub);letter-spacing:.3px}
+  .kv .v{font-size:15px;font-weight:600;margin-top:2px}
+
+  .why{margin-top:18px;font-size:14px;color:#39405a;background:#f8f9fd;border-left:3px solid var(--brand);
+       padding:12px 16px;border-radius:0 8px 8px 0}
+  .why b{color:var(--brand)}
+
+  footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--sub);font-size:13px}
+  .warn{background:#fff8e6;border:1px solid #f2d894;border-radius:9px;padding:12px 16px;
+        font-size:13.5px;color:#7a5a00;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>线索打分器</h1>
+    <p class="lede">把你收到的一条客户留言粘进来，立刻看到它值不值得马上打电话。规则全部公开，不打黑箱分。</p>
+  </header>
+
+  <div class="card">
+    <label for="msg">客户留言原文</label>
+    <textarea id="msg" placeholder="例如：我们厂 8 个车间想上 AI 质检，报价多少？预算 10 万左右">8个车间想上AI质检，报价多少？预算10万</textarea>
+
+    <div class="row">
+      <div>
+        <label for="budget">客户填的预算（可空）</label>
+        <input id="budget" placeholder="10万 / 15k / ¥15,000" value="10万">
+      </div>
+      <div>
+        <label for="name">客户称呼（可空）</label>
+        <input id="name" placeholder="张经理" value="张经理">
+      </div>
+    </div>
+
+    <div class="samples">
+      <span class="hint" style="align-self:center;margin-right:2px">换几条试试：</span>
+      <button data-m="8个车间想上AI质检，报价多少？预算10万" data-b="10万" data-n="张经理">高意向·制造</button>
+      <button data-m="我们做电商店铺的，想找你们做合同报价，预算15k" data-b="15k" data-n="陈总">高意向·电商</button>
+      <button data-m="想了解一下你们有没有做过诊所的案例，有什么功能" data-b="" data-n="李女士">中等意向·医疗</button>
+      <button data-m="专业代开发票，加微信领免费资料，点击链接" data-b="" data-n="王先生">垃圾广告</button>
+      <button data-m="在吗" data-b="" data-n="赵">几乎没信息</button>
+      <button data-m="律所想采购一套案件管理自动化，什么时候能开始？付款方式怎么走" data-b="8万" data-n="刘律师">高意向·法律</button>
+    </div>
+
+    <div class="go">
+      <button class="primary" id="run">打分</button>
+      <button class="ghost" id="more">展开：加上电话/邮箱再打一次</button>
+    </div>
+    <div class="row" id="extra" style="display:none">
+      <div><label for="phone">电话</label><input id="phone" placeholder="13800138000"></div>
+      <div><label for="email">邮箱</label><input id="email" placeholder="zhang@factory.com"></div>
+    </div>
+  </div>
+
+  <div id="out">
+    <div class="card">
+      <div class="verdict">
+        <div class="dial">
+          <svg width="96" height="96" viewBox="0 0 96 96">
+            <circle cx="48" cy="48" r="42" fill="none" stroke="#eef0f6" stroke-width="9"></circle>
+            <circle id="ring" cx="48" cy="48" r="42" fill="none" stroke="#c0392b" stroke-width="9"
+                    stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="264"
+                    style="transition:stroke-dashoffset .6s cubic-bezier(.22,1,.36,1),stroke .3s"></circle>
+          </svg>
+          <div class="num"><b id="score">0</b><span>分</span></div>
+        </div>
+        <div class="vtext">
+          <h2><span class="tag" id="tag">—</span><span id="title">—</span></h2>
+          <p id="sub"></p>
+        </div>
+      </div>
+
+      <div class="kv">
+        <div><div class="k">识别行业</div><div class="v" id="k-ind">—</div></div>
+        <div><div class="k">解析预算</div><div class="v" id="k-bud">—</div></div>
+        <div><div class="k">建议动作</div><div class="v" id="k-act">—</div></div>
+        <div><div class="k">是否人工复核</div><div class="v" id="k-rev">—</div></div>
+      </div>
+
+      <div class="bars" id="bars"></div>
+      <div class="why" id="why"></div>
+    </div>
+  </div>
+
+  <footer>
+    <p style="margin:0 0 6px"><b>这套规则是完全公开的。</b>你可以在下面看到每一分的来源，也可以直接对照自己的业务改。</p>
+    <p style="margin:0">纯规则引擎，不调用任何大模型，<b>打分成本 0 元</b>，同样的输入永远得到同样的结果。</p>
+    <div class="warn" id="warn" style="display:none"></div>
+  </footer>
+</div>
+
+<script src="rules.js"></script>
+<script>
+const R = window.RULES;
+
+function parseBudget(v){
+  if(v === null || v === undefined) return null;
+  let s = String(v).trim().toLowerCase().replace(/,/g,'').replace(/[¥￥]/g,'');
+  if(!s) return null;
+  let mult = 1;
+  if(/[万w]$/.test(s)){ mult = 10000; s = s.slice(0,-1); }
+  else if(/k$/.test(s) || /千$/.test(s)){ mult = 1000; s = s.slice(0,-1); }
+  const m = s.match(/\d+(\.\d+)?/);
+  if(!m) return null;
+  const n = Math.round(parseFloat(m[0]) * mult);
+  return n > 0 ? n : null;
+}
+
+function evaluate(d){
+  const text = ((d.message||'') + ' ' + (d.name||'')).toLowerCase();
+  const out = { steps: [], reasons: [], score: 0 };
+
+  // 垃圾一票否决
+  for(const s of R.spam){
+    if(text.includes(s)){
+      out.spam = '命中垃圾词：' + s;
+      break;
+    }
+  }
+  if(!out.spam && (d.email||'').split('@')[1] === 'mailinator.com') out.spam = '一次性邮箱';
+
+  out.budget = parseBudget(d.budget);   // 先解析，spam 分支也要有值
+  out.industry = null;
+
+  if(out.spam){
+    out.score = 0; out.intent = 'spam'; out.needsReview = false;
+    out.reasons.push(out.spam);
+    out.steps.push({lab:'垃圾词命中（一票否决）', val:-100, neg:true});
+    return out;
+  }
+
+  // 意向词
+  const hitHigh = R.high.filter(w => text.includes(w));
+  const hitMid  = R.mid.filter(w => text.includes(w));
+  if(hitHigh.length){
+    out.score += 45;
+    out.reasons.push('强意向词 ' + hitHigh.length + ' 个：' + hitHigh.slice(0,3).join('、'));
+    out.steps.push({lab:'强意向词 ×' + hitHigh.length, val:45});
+  } else if(hitMid.length){
+    out.score += 20;
+    out.reasons.push('中等意向：' + hitMid.slice(0,2).join('、'));
+    out.steps.push({lab:'中等意向词', val:20});
+  } else {
+    out.steps.push({lab:'意向词', val:0});
+  }
+
+  // 预算
+  const b = parseBudget(d.budget);
+  out.budget = b;
+  if(b !== null){
+    if(b >= 5000){ out.score += 25; out.reasons.push('预算明确 ≥5000 元（' + b + ' 元）'); out.steps.push({lab:'预算充足', val:25}); }
+    else if(b >= 1000){ out.score += 15; out.reasons.push('预算 1000–5000 元（' + b + ' 元）'); out.steps.push({lab:'预算中等', val:15}); }
+    else { out.score += 5; out.reasons.push('预算偏低（' + b + ' 元）'); out.steps.push({lab:'预算偏低', val:5}); }
+  } else {
+    out.steps.push({lab:'预算', val:0});
+  }
+
+  // 行业
+  let ind = null;
+  for(const k of Object.keys(R.ind)){
+    if(R.ind[k].some(w => text.includes(w))){ ind = k; break; }
+  }
+  out.industry = ind;
+  if(ind){ out.score += 15; out.reasons.push('目标行业：' + ind); out.steps.push({lab:'行业匹配', val:15}); }
+  else out.steps.push({lab:'行业', val:0});
+
+  // 完整度
+  const filled = ['name','email','phone','message'].filter(k => d[k] && String(d[k]).trim()).length;
+  if(filled === 4){ out.score += 10; out.reasons.push('四项联系方式齐全'); out.steps.push({lab:'信息完整', val:10}); }
+  else if(filled <= 1){ out.score -= 20; out.reasons.push('联系方式严重缺失'); out.steps.push({lab:'信息缺失', val:-20, neg:true}); }
+  else out.steps.push({lab:'信息完整度', val:0});
+
+  if((d.message||'').length < 10){
+    out.score -= 15; out.reasons.push('消息过短'); out.steps.push({lab:'消息过短', val:-15, neg:true});
+  }
+
+  out.score = Math.max(0, Math.min(100, out.score));
+  out.intent = out.score >= 70 ? 'hot' : (out.score >= 35 ? 'warm' : 'cold');
+  out.needsReview = (out.score >= 35 && out.score <= 50) || (out.score >= 70 && b === null);
+  return out;
+}
+
+const META = {
+  hot:  {color:'#c0392b', title:'高意向 · 立刻打电话'},
+  warm: {color:'#d68910', title:'中等意向 · 进跟进池'},
+  cold: {color:'#5d7cb5', title:'低意向 · 低频培育'},
+  spam: {color:'#8b93a3', title:'垃圾广告 · 直接归档'}
+};
+const ACT = {
+  hot: '5 分钟内联系',
+  warm: '当天联系',
+  cold: '进邮件/内容培育',
+  spam: '不分配销售'
+};
+
+const $ = id => document.getElementById(id);
+
+function render(d){
+  const r = evaluate(d);
+  const meta = META[r.intent];
+
+  $('out').style.display = 'block';
+  $('score').textContent = r.score;
+  $('score').style.color = meta.color;
+  $('tag').textContent = r.intent;
+  $('tag').style.background = meta.color;
+  $('title').textContent = meta.title;
+  $('sub').textContent = r.reasons.length
+      ? '判定理由：' + r.reasons.join('；')
+      : '没有任何规则命中';
+
+  const ring = $('ring');
+  const C = 2 * Math.PI * 42;
+  ring.style.stroke = meta.color;
+  ring.setAttribute('stroke-dasharray', C.toFixed(1));
+  ring.setAttribute('stroke-dashoffset', (C * (1 - r.score/100)).toFixed(1));
+
+  $('k-ind').textContent = r.industry || '未识别';
+  $('k-bud').textContent  = r.budget === null ? '未填写 / 无法解析'
+      : (r.budget >= 10000 ? (r.budget/10000) + ' 万元' : r.budget + ' 元');
+  $('k-act').textContent  = ACT[r.intent];
+  $('k-rev').textContent  = r.intent === 'spam' ? '—' : (r.needsReview ? '需要' : '不需要');
+
+  // 分数条
+  const maxAbs = Math.max(45, ...r.steps.map(s => Math.abs(s.val)));
+  $('bars').innerHTML = r.steps.map(s => {
+    const w = Math.abs(s.val) / maxAbs * 100;
+    const color = s.neg ? '#c0392b' : (s.val > 0 ? '#2f6fb0' : '#c9cede');
+    return `<div class="bar ${s.neg?'neg':''}">
+      <span class="lab">${s.lab}</span>
+      <span class="track"><span class="fill" style="background:${color};width:0" data-w="${w.toFixed(1)}"></span></span>
+      <span class="val">${s.val > 0 ? '+' + s.val : (s.val === 0 ? '0' : s.val)}</span>
+    </div>`;
+  }).join('');
+  // 用 nextTick + 兜底超时，避免某些环境（无头浏览器/后台标签页）rAF 不触发导致条不显示
+  const paint = () => {
+    const els = document.querySelectorAll('#bars .fill');
+    els.forEach(el => { el.style.width = (el.dataset.w || 0) + '%'; });
+  };
+  // 先强制布局，再在下一帧设置宽度，过渡动画才会生效；同时留一个兜底定时器
+  void document.getElementById('bars').offsetHeight;
+  requestAnimationFrame(() => requestAnimationFrame(paint));
+  setTimeout(paint, 120);
+
+  $('why').innerHTML = '<b>结论</b>：' + meta.title + '。' +
+      (r.intent === 'spam' ? '建议不分配销售，直接归档。' :
+       r.intent === 'hot' ? '这条应该排在销售队列最前面，' + (r.needsReview ? '但它没写预算，建议先人工确认一下需求再报价。' : '马上联系。') :
+       r.intent === 'warm' ? '先问清预算和具体需求，再决定要不要安排演示。' :
+       '先补齐「想解决什么问题、预算多少、什么时候要」，再判断优先级。');
+
+  // 边界提示
+  const warn = $('warn');
+  const hits = [...R.high, ...R.mid, ...R.spam].filter(w => (d.message||'').toLowerCase().includes(w));
+  if(hits.length === 0 && r.intent !== 'spam'){
+    warn.style.display = 'block';
+    warn.innerHTML = '注意：这条留言没有命中词表里的任何一个词，所以分数主要来自「信息完整性」和扣分项。'
+      + '这说明<b>规则需要针对你的业务补充词表</b>——这也是这套东西真正的定制成本所在。';
+  } else {
+    warn.style.display = 'none';
+  }
+}
+
+function collect(){
+  return {
+    message: $('msg').value,
+    budget:  $('budget').value,
+    name:    $('name').value,
+    phone:   $('phone').value,
+    email:   $('email').value
+  };
+}
+
+$('run').addEventListener('click', () => render(collect()));
+$('more').addEventListener('click', () => {
+  const ex = $('extra');
+  const open = ex.style.display === 'grid';
+  ex.style.display = open ? 'none' : 'grid';
+  $('more').textContent = open ? '展开：加上电话/邮箱再打一次' : '收起';
+});
+document.querySelectorAll('.samples button').forEach(b => {
+  b.addEventListener('click', () => {
+    $('msg').value = b.dataset.m;
+    $('budget').value = b.dataset.b;
+    $('name').value = b.dataset.n;
+    render(collect());
+  });
+});
+$('msg').addEventListener('keydown', e => {
+  if((e.metaKey || e.ctrlKey) && e.key === 'Enter') render(collect());
+});
+
+// 首屏直接出结果
+render(collect());
+</script>
+</body>
+</html>
