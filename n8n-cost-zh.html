@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>n8n 到底要花多少钱？（2026 实测账本）</title>
+<meta name="description" content="n8n 自托管的真实成本账：授权 €0，服务器约 60 元/月，每条线索处理成本 0 元。附与 Cloud 的盈亏平衡点和 9 小时调试时间账。">
+<style>
+:root{--ink:#1a1d24;--dim:#5d6470;--line:#e3e6ec;--bg:#fbfcfd;--acc:#2f6fb0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:56px 22px 96px}
+h1{font-size:2em;line-height:1.25;margin:0 0 .5em;letter-spacing:-.02em}
+h2{font-size:1.35em;margin:2.2em 0 .6em;padding-bottom:.3em;border-bottom:1px solid var(--line)}
+h3{font-size:1.08em;margin:1.6em 0 .4em}
+p{margin:.85em 0}
+a{color:var(--acc);text-decoration:none;border-bottom:1px solid rgba(47,111,176,.3)}
+a:hover{border-bottom-color:var(--acc)}
+blockquote{margin:1.4em 0;padding:.9em 1.1em;background:#eef4fa;border-left:3px solid var(--acc);border-radius:0 4px 4px 0;color:#2c3e50}
+blockquote p{margin:.3em 0}
+table{width:100%;border-collapse:collapse;margin:1.3em 0;font-size:.92em;display:block;overflow-x:auto}
+th,td{padding:.55em .7em;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#f2f5f9;font-weight:600;white-space:nowrap}
+tr:hover td{background:#f8fafc}
+code{background:#eef1f5;padding:.15em .4em;border-radius:3px;font-size:.9em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+pre{background:#1e2430;color:#dfe6ef;padding:1em 1.1em;border-radius:6px;overflow-x:auto;font-size:.88em;line-height:1.6}
+pre code{background:none;padding:0;color:inherit}
+hr{border:0;border-top:1px solid var(--line);margin:2.5em 0}
+em{color:var(--dim)}
+.foot{margin-top:3em;padding-top:1.2em;border-top:1px solid var(--line);font-size:.9em;color:var(--dim)}
+@media(prefers-color-scheme:dark){
+ body{--ink:#e6e9ef;--dim:#9aa3b2;--line:#2b3240;--bg:#14171d}
+ th{background:#1c222c} tr:hover td{background:#1a2029}
+ code{background:#222936} blockquote{background:#1a2532;color:#c8d4e2}
+ pre{background:#0e1116}
+}
+</style>
+</head>
+<body>
+<article>
+<h1 id="n8n-2026">n8n 到底要花多少钱？（2026 版，附实测账本）</h1>
+<p>搜这个问题的人，八成看到的是同一张截图：官网定价页，几个欧元数字。</p>
+<p>但那不是你想问的。你真正想知道的是：<strong>这东西跑起来以后，一个月从我卡上扣多少钱？</strong></p>
+<p>我自己自托管跑了一条生产工作流，下面是真实的账单。</p>
+<blockquote>
+<p><strong>先说结论</strong>：月执行量 3000 次以内、工作流不调大模型的话，自托管成本<strong>几乎是零</strong>（一台 60 块/月的云服务器，或者一台闲着的旧电脑）。真正贵的是<strong>你调试花掉的时间</strong>，不是授权费。</p>
+</blockquote>
+<hr />
+<h2 id="2026-10">一、官方价格（2026 年 10 月）</h2>
+<table>
+<thead>
+<tr>
+<th>套餐</th>
+<th>价格</th>
+<th>执行次数</th>
+<th>适合谁</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>社区版</strong>（自托管）</td>
+<td><strong>免费</strong></td>
+<td>不限</td>
+<td>会跑 Docker 就行</td>
+</tr>
+<tr>
+<td>Cloud Starter</td>
+<td>€20/月（年付）</td>
+<td>2,500</td>
+<td>不想碰服务器</td>
+</tr>
+<tr>
+<td>Cloud Pro</td>
+<td>€50/月（年付）</td>
+<td>按需</td>
+<td>个人开发者上生产</td>
+</tr>
+<tr>
+<td>Cloud Business</td>
+<td>€667/月</td>
+<td>40,000</td>
+<td>百人以内公司，要 SSO</td>
+</tr>
+<tr>
+<td>Enterprise</td>
+<td>联系销售</td>
+<td>按需</td>
+<td>有合规要求</td>
+</tr>
+</tbody>
+</table>
+<p>定价页上有两件事它没告诉你：</p>
+<p><strong>第一，社区版不限执行次数。</strong> Cloud 按执行次数收费，自托管按服务器收费。一旦你的月执行量过了几千次，这个区别就是全部。</p>
+<p><strong>第二，“执行”指整条工作流跑一遍，不是单个节点。</strong> n8n 不按节点收费。一个 30 个节点的工作流，算 1 次执行。</p>
+<hr />
+<h2 id="_1">二、我实际花了多少</h2>
+<p>我跑的是一条线索分级流水线：webhook 收到线索 → 清洗 → 去重 → 打分 → 分配给销售 → 汇总进每日简报。</p>
+<table>
+<thead>
+<tr>
+<th>项目</th>
+<th>我的实际成本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>n8n 社区版授权</td>
+<td><strong>€0</strong></td>
+</tr>
+<tr>
+<td>云服务器（2 核 4G，国内轻量云）</td>
+<td><strong>约 60 元/月</strong></td>
+</tr>
+<tr>
+<td>Docker</td>
+<td>0</td>
+</tr>
+<tr>
+<td>数据库</td>
+<td>SQLite（自带），0</td>
+</tr>
+<tr>
+<td><strong>大模型 API 调用</strong></td>
+<td><strong>0 元</strong></td>
+</tr>
+<tr>
+<td><strong>每条线索的处理成本</strong></td>
+<td><strong>0 元</strong></td>
+</tr>
+</tbody>
+</table>
+<p>最后一行值得单独解释。</p>
+<hr />
+<h2 id="_2">三、这块是别人不会写进比价表的</h2>
+<p>我那套流水线用的<strong>不是大模型，是确定性规则引擎</strong>。所以处理一条线索的边际成本是精确的零——不发 token、不按次计费、没有速率限制。</p>
+<p>如果同样的活我用大模型做：</p>
+<table>
+<thead>
+<tr>
+<th>方案</th>
+<th>处理 1000 条的成本</th>
+<th>行为</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>规则引擎</td>
+<td><strong>0 元</strong></td>
+<td>同样输入永远同样输出</td>
+</tr>
+<tr>
+<td>大模型（小模型，每条 1 次）</td>
+<td>约 1.5–10 元</td>
+<td>每次跑结果会有一点点不同</td>
+</tr>
+<tr>
+<td>大模型（大模型，每条 1 次）</td>
+<td>约 15–110 元</td>
+<td>对乱写的文本更强，但仍然不确定</td>
+</tr>
+</tbody>
+</table>
+<p>单条成本看着都不算什么。乘以量之后就不是了。而且当客户问 <strong>“为什么这条线索昨天 62 分、今天 58 分”</strong> 的时候，你答不上来。</p>
+<p><strong>我用的一条判断标准：</strong></p>
+<ul>
+<li>任务需要对<strong>不规整的自然语言做判断</strong> → 上大模型</li>
+<li>任务需要<strong>一致、可审计、可复现的决策</strong> → 用规则。大模型只做前置分桶，桶里面还是规则说了算</li>
+</ul>
+<p>我见过的大部分“AI 自动化”项目，本质是第二种，被包装成了第一种。</p>
+<hr />
+<h2 id="vs-cloud">四、自托管 vs Cloud：盈亏平衡点到底在哪</h2>
+<p>Cloud Starter：€20/月 ÷ 2,500 次 = <strong>每次执行 0.008 欧</strong>。</p>
+<p>一台 60 元/月的服务器，只要你不跑重计算，扛的执行量远不止 2,500 次。所以：</p>
+<table>
+<thead>
+<tr>
+<th>你的月执行量</th>
+<th>更划算的</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>500 次以内</td>
+<td><strong>Cloud Starter</strong> — 贵一点，但零运维</td>
+</tr>
+<tr>
+<td>500 – 3,000 次</td>
+<td>差不多打平。看重时间就 Cloud，不介意碰服务器就自托管</td>
+</tr>
+<tr>
+<td>3,000 次以上</td>
+<td><strong>自托管</strong>，明显</td>
+</tr>
+</tbody>
+</table>
+<p>但有一项隐形成本：<strong>运维</strong>。自托管意味着备份、升级、证书、以及“它挂了得有人发现”。如果你不想管这些，那 €20 是值的——我不会为了让自托管显得聪明就去否认这一点。</p>
+<hr />
+<h2 id="_3">五、真正贵的不是授权费</h2>
+<p>我做完一条生产工作流的真实时间账：</p>
+<table>
+<thead>
+<tr>
+<th>环节</th>
+<th>耗时</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>搭工作流本身</td>
+<td>约 2 小时</td>
+</tr>
+<tr>
+<td>调一个字段求值的 bug（返回值被当表达式重新求值）</td>
+<td><strong>约 3 小时</strong></td>
+</tr>
+<tr>
+<td>调 webhook 冲突（旧工作流没删，重复监听同一个路径）</td>
+<td><strong>约 2 小时</strong></td>
+</tr>
+<tr>
+<td>修一个把手机号当预算的金额解析器</td>
+<td>约 1 小时</td>
+</tr>
+<tr>
+<td>写回归测试</td>
+<td>约 1 小时</td>
+</tr>
+<tr>
+<td><strong>合计</strong></td>
+<td><strong>约 9 小时</strong></td>
+</tr>
+</tbody>
+</table>
+<p>按一小时 150 元算，<strong>1350 元的时间</strong>，去搭一条月成本 60 块的东西。</p>
+<p>授权费从来不是问题，<strong>调试才是。</strong></p>
+<hr />
+<h2 id="_4">六、比订阅费更贵的三件事</h2>
+<p><strong>1. 静默失败。</strong> 某个节点开始返回 null，不报错。三周后你发现 CRM 里全是空值。从第一天就配错误分支，推到一个你真的会看的群里。</p>
+<p><strong>2. 重复的工作流。</strong> 老版本 n8n 里导入工作流会生成新 ID，旧的那条还在跑。两条工作流监听同一个 webhook 路径，先注册的那条赢。你改的是工作流 #4，实际在处理流量的是 #1，你改什么都没用。这个坑吃了我两小时。</p>
+<p><strong>3. 没有测试。</strong> 手上没有一组固定的“输入 → 期望输出”，每次改动都是赌。我那套就是一个几十行的脚本：喂进去一条，比对输出。够了。</p>
+<hr />
+<h2 id="_5">七、这几个问题我直接答</h2>
+<p><strong>n8n 免费吗？</strong>
+社区版免费，执行次数不限。你付的是服务器钱。</p>
+<p><strong>比 Zapier 便宜吗？</strong>
+量大就便宜得多。Zapier 按 task 收费，n8n 自托管按服务器收费。月 1 万次以上差一个数量级。月 200 次的时候，Zapier 的省心可能真的值那个钱。</p>
+<p><strong>要信用卡才能开始吗？</strong>
+不用。<code>docker run</code> 就跑起来了。</p>
+<p><strong>最低配什么服务器？</strong>
+2 核 4G 对小负载很舒服，1G 能跑测试。</p>
+<p><strong>大模型的费用呢？</strong>
+只有你自己选择调它才有。平台本身不强制。</p>
+<hr />
+<h2 id="_6">八、一页账</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>成本</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>授权</td>
+<td>€0</td>
+</tr>
+<tr>
+<td>基础设施</td>
+<td>0 – 60 元/月</td>
+</tr>
+<tr>
+<td>每次执行的边际成本</td>
+<td>€0</td>
+</tr>
+<tr>
+<td><strong>把它做对所需的时间</strong></td>
+<td><strong>这才是真正的支出</strong></td>
+</tr>
+</tbody>
+</table>
+<p>如果有人给你报了个“n8n 授权费”的大数，那他不是在卖 Cloud Business，就是没查过。</p>
+<p>这个赛道的钱不在平台上，<strong>在那九个小时里</strong>——那是文档没法提前告诉你的部分。</p>
+<hr />
+<h2 id="_7">九、别信我，自己验</h2>
+<p>上面所有数字你都可以自己复现，不用注册、不用装东西：</p>
+<p><strong><a href="https://yff124.github.io/lead-scorer/">yff124.github.io/lead-scorer</a></strong> — 浏览器打开就能用的线索打分器，粘一条客户留言，立刻看到分级、每一分的来源、以及为什么。纯前端，数据不出你的浏览器。</p>
+<p><strong><a href="https://github.com/yff124/lead-scorer">github.com/yff124/lead-scorer</a></strong> — 全套规则和测试都在仓库里，包括 42 条断言和三端对拍脚本。</p>
+<p>判断标准可以公开到这个程度。你去问任何一家做自动化的，看他们敢不敢把打分规则摊开给你看。</p>
+</article>
+</body>
+</html>
