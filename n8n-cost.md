@@ -141,4 +141,27 @@ If someone quotes you a big number for "n8n licensing", they're either selling C
 
 ---
 
-*I build these workflows and publish the tests. The lead-scoring pipeline referenced above is open: [github.com/yff124/lead-scorer](https://github.com/yff124/lead-scorer) — live demo at [yff124.github.io/lead-scorer](https://yff124.github.io/lead-scorer/).*
+## Don't take my word for it — run the tests
+
+The lead-scoring pipeline above is open. One command, nothing to install beyond `node` and `python3`:
+
+```bash
+curl -sL https://yff124.github.io/lead-scorer/自检.sh | bash
+```
+
+It downloads the files to a temp directory and runs 6 suites:
+
+```
+Web regression (budget / contact / tiering)     22 passed / 0 failed
+Web industry vocabularies (6 verticals)         20 passed / 0 failed
+Python core selftest                            all passed
+n8n vs Python cross-check                       tiers match 17/17
+300-lead stress test                            all passed
+Three-engine agreement (web/Python/n8n)         match 18/18
+```
+
+**Why I bothered:** the real risk with a rule-based system isn't that it's dumb. It's that you change one rule, break three others, and nobody notices — a customer's messages get mis-scored for three months and you never find out.
+
+So I wrote the same rules three times (browser JS, Python core, n8n node) and cross-check the **tier** each one assigns across 18 leads. One mismatch and the check fails. That habit is the most valuable part of the nine hours.
+
+Live demo: [yff124.github.io/lead-scorer](https://yff124.github.io/lead-scorer/) — code: [github.com/yff124/lead-scorer](https://github.com/yff124/lead-scorer).
