@@ -99,6 +99,15 @@
   .trust a{color:var(--brand);text-decoration:none;border-bottom:1px solid rgba(47,111,176,.3)}
   .tail{margin:16px 0 0;font-size:13px;color:var(--sub);line-height:1.7}
   @media(max-width:680px){ .trust{grid-template-columns:1fr} }
+
+  .indpick{margin-bottom:18px;padding-bottom:16px;border-bottom:1px dashed var(--line)}
+  .indrow{display:flex;flex-wrap:wrap;gap:7px;margin-top:8px}
+  .indrow button{background:#fff;border:1px solid var(--line);border-radius:20px;
+    padding:6px 15px;font-size:13.5px;color:#39405a;cursor:pointer;font-family:inherit;
+    transition:all .15s}
+  .indrow button:hover{border-color:var(--brand);color:var(--brand)}
+  .indrow button.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+  .indnote{margin:9px 0 0;font-size:12.5px;color:var(--sub);line-height:1.6;min-height:1.6em}
 </style>
 </head>
 <body>
@@ -117,8 +126,14 @@
   </div>
 
   <div class="card">
+    <div class="indpick">
+      <label for="ind">先选你的行业（决定用哪套词表）</label>
+      <div class="indrow" id="indrow"></div>
+      <p class="indnote" id="indnote"></p>
+    </div>
+
     <label for="msg">客户留言原文</label>
-    <textarea id="msg" placeholder="例如：我们厂 8 个车间想上 AI 质检，报价多少？预算 10 万左右">8个车间想上AI质检，报价多少？预算10万</textarea>
+    <textarea id="msg" placeholder="例如：我们厂 8 个车间想上 AI 质检，报价多少？预算 10 万左右">8个车间想上AI质检，报价多少？预算10万，电话13800138000</textarea>
 
     <div class="row">
       <div>
@@ -133,14 +148,13 @@
 
     <div class="samples">
       <span class="hint" style="align-self:center;margin-right:2px">换几条试试：</span>
-      <button data-m="8个车间想上AI质检，报价多少？预算10万" data-b="10万" data-n="张经理">高意向·制造</button>
+      <button data-m="8个车间想上AI质检，报价多少？预算10万，电话13800138000" data-b="10万" data-n="张经理">高意向·制造</button>
       <button data-m="我们做电商店铺的，想找你们做合同报价，预算15k" data-b="15k" data-n="陈总">高意向·电商</button>
       <button data-m="想了解一下你们有没有做过诊所的案例，有什么功能" data-b="" data-n="李女士">中等意向·医疗</button>
       <button data-m="专业代开发票，加微信领免费资料，点击链接" data-b="" data-n="王先生">垃圾广告</button>
       <button data-m="在吗" data-b="" data-n="赵">几乎没信息</button>
       <button data-m="律所想采购一套案件管理自动化，什么时候能开始？付款方式怎么走" data-b="8万" data-n="刘律师">高意向·法律</button>
     </div>
-
     <div class="go">
       <button class="primary" id="run">打分</button>
       <button class="ghost" id="more">展开：加上电话/邮箱再打一次</button>
@@ -210,6 +224,7 @@
 </div>
 
 <script src="rules.js"></script>
+<script src="industry-rules.js"></script>
 <script>
 const R = window.RULES;
 
@@ -281,8 +296,15 @@ function evaluate(d){
   const text = ((d.message||'') + ' ' + (d.name||'')).toLowerCase();
   const out = { steps: [], reasons: [], score: 0 };
 
+  // 选了具体行业就用行业词表，没选就用通用词表
+  const IR = (window.INDUSTRY_RULES || {})[d.vertical] || null;
+  const R_high = IR ? IR.high : R.high;
+  const R_mid  = IR ? IR.mid  : R.mid;
+  const R_spam = IR ? IR.spam.concat(R.spam.filter(w => !IR.spam.includes(w))) : R.spam;
+  out.vertical = IR ? IR.label : null;
+
   // 垃圾一票否决
-  for(const s of R.spam){
+  for(const s of R_spam){
     if(text.includes(s)){
       out.spam = '命中垃圾词：' + s;
       break;
@@ -307,8 +329,8 @@ function evaluate(d){
   }
 
   // 意向词
-  const hitHigh = R.high.filter(w => text.includes(w));
-  const hitMid  = R.mid.filter(w => text.includes(w));
+  const hitHigh = R_high.filter(w => text.includes(w));
+  const hitMid  = R_mid.filter(w => text.includes(w));
   if(hitHigh.length){
     out.score += 45;
     out.reasons.push('强意向词 ' + hitHigh.length + ' 个：' + hitHigh.slice(0,3).join('、'));
@@ -335,13 +357,28 @@ function evaluate(d){
       out.lowBudget = true;
     }
   } else {
-    out.steps.push({lab:'预算', val:0});
+    // 没写预算，但命中了具体行业服务项 —— 这类线索的客单价是可估的。
+    // 例：牙科客户说"隐形矫正多少钱"，行业均价 8 千，不是"没预算"。
+    // 按行业典型客单价的 50% 保守估算，只给一半分，避免虚高。
+    if(IR && IR.typical && hitHigh.length){
+      const est = Math.round(IR.typical * 0.5);
+      out.score += 12;
+      out.estBudget = est;
+      out.reasons.push('没写预算，但问的是' + IR.label + '的标准服务项，按行业均价估 ≈' + (est>=10000 ? (est/10000)+' 万' : est+' 元'));
+      out.steps.push({lab:'预算（按行业估算）', val:12});
+    } else {
+      out.steps.push({lab:'预算', val:0});
+    }
   }
 
-  // 行业
+  // 行业：选了具体行业就用它的 signals 判断；没选就扫通用行业表
   let ind = null;
-  for(const k of Object.keys(R.ind)){
-    if(R.ind[k].some(w => text.includes(w))){ ind = k; break; }
+  if(IR){
+    if(IR.signals.some(w => text.includes(w))) ind = IR.label;
+  } else {
+    for(const k of Object.keys(R.ind)){
+      if(R.ind[k].some(w => text.includes(w))){ ind = k; break; }
+    }
   }
   out.industry = ind;
   if(ind){ out.score += 15; out.reasons.push('目标行业：' + ind); out.steps.push({lab:'行业匹配', val:15}); }
@@ -474,9 +511,46 @@ function collect(){
     budget:  $('budget').value,
     name:    $('name').value,
     phone:   $('phone').value,
-    email:   $('email').value
+    email:   $('email').value,
+    vertical: currentInd
   };
 }
+
+// ---- 行业选择器 ----
+let currentInd = null;   // null = 通用词表
+
+function buildIndButtons(){
+  const row = $('indrow');
+  if(!row) return;
+  const IR = window.INDUSTRY_RULES || {};
+  const mk = (key, text) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = text;
+    b.dataset.k = key || '';
+    if(!key) b.classList.add('on');
+    b.addEventListener('click', () => {
+      currentInd = key || null;
+      row.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      const note = $('indnote');
+      if(key && IR[key]){
+        note.textContent = IR[key].note || '';
+        // 换行业时顺手把示例换成该行业的说法
+        const demo = IR[key].demo;
+        if(demo){ $('msg').value = demo; $('budget').value = ''; }
+      } else {
+        note.textContent = '通用词表：适合还没确定行业，或者客户说话比较标准的情况。';
+      }
+      render(collect());
+    });
+    row.appendChild(b);
+  };
+  mk(null, '通用');
+  Object.keys(IR).forEach(k => mk(k, IR[k].label || k));
+}
+
+buildIndButtons();
+$('indnote').textContent = '通用词表：适合还没确定行业，或者客户说话比较标准的情况。';
 
 $('run').addEventListener('click', () => render(collect()));
 $('more').addEventListener('click', () => {
