@@ -288,17 +288,24 @@ function evaluate(d){
   else out.steps.push({lab:'行业', val:0});
 
   // 完整度：分项框 + 正文里识别到 都算
+  // 注意：强意向线索还没留电话是正常的（刚问报价的人不会一上来就交底），
+  // 所以缺联系方式只在"没有强意向词"时才重罚，否则只轻扣。
   const hasName  = !!(d.name  && String(d.name).trim());
   const hasEmail = !!(d.email && String(d.email).trim()) || !!out.contacts.email;
   const hasPhone = !!(d.phone && String(d.phone).trim()) || !!out.contacts.phone || !!out.contacts.wechat;
   const hasMsg   = !!(d.message && String(d.message).trim());
   const filled = [hasName, hasEmail, hasPhone, hasMsg].filter(Boolean).length;
   if(filled === 4){ out.score += 10; out.reasons.push('四项联系方式齐全'); out.steps.push({lab:'信息完整', val:10}); }
-  else if(filled <= 1){ out.score -= 20; out.reasons.push('联系方式严重缺失'); out.steps.push({lab:'信息缺失', val:-20, neg:true}); }
-  else if(!hasPhone && !hasEmail){ out.score -= 10; out.reasons.push('留了需求但没留联系方式'); out.steps.push({lab:'缺联系方式', val:-10, neg:true}); }
+  else if(!hasPhone && !hasEmail){
+    const penalty = hitHigh.length ? -5 : -15;
+    out.score += penalty;
+    out.reasons.push(hitHigh.length ? '还没留联系方式（但意向明确，优先回他）' : '留了需求但没留联系方式');
+    out.steps.push({lab:'缺联系方式', val:penalty, neg:true});
+  }
   else out.steps.push({lab:'信息完整度', val:0});
 
-  if((d.message||'').length < 10){
+  // 消息过短：只在"也没意向词"时才扣，一句话问报价的信息密度其实很高
+  if((d.message||'').length < 10 && !hitHigh.length){
     out.score -= 15; out.reasons.push('消息过短'); out.steps.push({lab:'消息过短', val:-15, neg:true});
   }
 
