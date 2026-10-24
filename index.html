@@ -80,6 +80,25 @@
   footer{margin-top:34px;padding-top:18px;border-top:1px solid var(--line);color:var(--sub);font-size:13px}
   .warn{background:#fff8e6;border:1px solid #f2d894;border-radius:9px;padding:12px 16px;
         font-size:13.5px;color:#7a5a00;margin-top:14px}
+
+  .who{margin:14px 0 0;font-size:14.5px;line-height:1.7;color:#39405a;
+       background:#f4f7fb;border-radius:9px;padding:13px 16px}
+  .who b{color:var(--brand)}
+  .how{display:grid;gap:9px;margin:18px 0 4px}
+  .how>div{display:flex;align-items:flex-start;gap:10px;font-size:14px;color:#39405a;
+           background:#fff;border:1px solid var(--line);border-radius:9px;padding:11px 15px}
+  .how .n{flex:0 0 21px;height:21px;line-height:21px;text-align:center;border-radius:50%;
+          background:var(--brand);color:#fff;font-size:12px;font-weight:600;margin-top:1px}
+  @media(max-width:560px){ .who{font-size:13.5px} .how>div{font-size:13.5px} }
+
+  .trust{display:grid;gap:12px;margin:20px 0 0;grid-template-columns:1fr 1fr}
+  .trust>div{background:#fff;border:1px solid var(--line);border-radius:10px;padding:14px 16px}
+  .trust h4{margin:0 0 7px;font-size:13.5px;color:var(--brand);font-weight:600}
+  .trust p{margin:0 0 6px;font-size:13px;line-height:1.65;color:#4b5268}
+  .trust p:last-child{margin-bottom:0}
+  .trust a{color:var(--brand);text-decoration:none;border-bottom:1px solid rgba(47,111,176,.3)}
+  .tail{margin:16px 0 0;font-size:13px;color:var(--sub);line-height:1.7}
+  @media(max-width:680px){ .trust{grid-template-columns:1fr} }
 </style>
 </head>
 <body>
@@ -87,7 +106,15 @@
   <header>
     <h1>线索打分器</h1>
     <p class="lede">把你收到的一条客户留言粘进来，立刻看到它值不值得马上打电话。规则全部公开，不打黑箱分。</p>
+    <p class="who">给谁用：<b>靠表单/私信/公众号收客户咨询，但销售按到达顺序一个一个跟</b>的小团队。
+      进来的线索里七成是随便问问和广告，真正要买的混在中间，两天后才被翻出来。</p>
   </header>
+
+  <div class="how">
+    <div><span class="n">1</span>粘一条真实留言（客户名字可以去掉）</div>
+    <div><span class="n">2</span>看分数、看每一分怎么来的、看该什么时候联系</div>
+    <div><span class="n">3</span>往下翻，规则全部公开，可以照着改成你自己行业的说法</div>
+  </div>
 
   <div class="card">
     <label for="msg">客户留言原文</label>
@@ -158,7 +185,27 @@
   <footer>
     <p style="margin:0 0 6px"><b>这套规则是完全公开的。</b>你可以在下面看到每一分的来源，也可以直接对照自己的业务改。</p>
     <p style="margin:0">纯规则引擎，不调用任何大模型，<b>打分成本 0 元</b>，同样的输入永远得到同样的结果。</p>
+
+    <div class="trust">
+      <div>
+        <h4>你的数据去哪了</h4>
+        <p>哪也没去。<b>所有计算在你自己的浏览器里完成</b>，没有后端、没有埋点、没有数据回传。
+           你可以断网之后再打一次分，结论一模一样——这就是证明。</p>
+      </div>
+      <div>
+        <h4>凭什么信这个</h4>
+        <p>代码和测试全部公开：<a href="https://github.com/yff124/lead-scorer" target="_blank" rel="noopener">github.com/yff124/lead-scorer</a>。
+           22 项回归测试摆在那里，改坏了跑一遍就知道。</p>
+        <p>顺手记了两个我自己踩的坑：
+           <a href="https://github.com/yff124/lead-scorer" target="_blank" rel="noopener">手机号被当成预算 138 亿</a>、
+           高意向因为没留电话被判成低意向。都在仓库里写着怎么修的。</p>
+      </div>
+    </div>
+
     <div class="warn" id="warn" style="display:none"></div>
+
+    <p class="tail">网页版只能一条一条试。要批量（CSV 进、Excel 出）或者自动跑（客户一提交就判、自动派给销售），那部分收费。
+      先自己试，觉得对路再聊。</p>
   </footer>
 </div>
 
