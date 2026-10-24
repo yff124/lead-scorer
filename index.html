@@ -279,8 +279,14 @@ function evaluate(d){
   const budSrc = out.budgetFromText ? '（正文中识别）' : '';
   if(b !== null){
     if(b >= 5000){ out.score += 25; out.reasons.push('预算明确 ≥5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算充足', val:25}); }
-    else if(b >= 1000){ out.score += 15; out.reasons.push('预算 1000–5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算中等', val:15}); }
-    else { out.score += 5; out.reasons.push('预算偏低（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算偏低', val:5}); }
+    else if(b >= 1000){ out.score += 10; out.reasons.push('预算 1000–5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算中等', val:10}); }
+    else {
+      // 预算低于 1000 元：很可能不是目标客户，明确告知，别让人空欢喜
+      out.score -= 15;
+      out.reasons.push('预算只有 ' + b + ' 元，差距较大' + budSrc);
+      out.steps.push({lab:'预算过低', val:-15, neg:true});
+      out.lowBudget = true;
+    }
   } else {
     out.steps.push({lab:'预算', val:0});
   }
@@ -398,6 +404,7 @@ function render(d){
 
   $('why').innerHTML = '<b>结论</b>：' + meta.title + '。' +
       (r.intent === 'spam' ? '建议不分配销售，直接归档。' :
+       r.lowBudget ? '他想花 ' + r.budget + ' 元解决这个问题，和你的报价差得远。别直接拒，先给个低价方案或资料包养着，不值得投入销售时间。' :
        r.intent === 'hot' ? '这条应该排在销售队列最前面，' + (r.needsReview ? '但它没写预算，建议先人工确认一下需求再报价。' : '马上联系。') :
        r.intent === 'warm' ? '先问清预算和具体需求，再决定要不要安排演示。' :
        '先补齐「想解决什么问题、预算多少、什么时候要」，再判断优先级。');
