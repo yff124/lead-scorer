@@ -448,9 +448,15 @@ function render(d){
   ring.setAttribute('stroke-dashoffset', (C * (1 - r.score/100)).toFixed(1));
 
   $('k-ind').textContent = r.industry || '未识别';
-  $('k-bud').textContent  = r.budget === null ? '未填写 / 无法解析'
-      : (r.budget >= 10000 ? (r.budget/10000) + ' 万元' : r.budget + ' 元')
-        + (r.budgetFromText ? ' · 正文识别' : '');
+  if(r.budget === null && r.estBudget){
+    $('k-bud').textContent = '≈ ' + (r.estBudget >= 10000 ? (r.estBudget/10000) + ' 万元' : r.estBudget + ' 元') + ' · 行业估价';
+    $('k-bud').style.color = '#b9770e';
+  } else {
+    $('k-bud').textContent  = r.budget === null ? '未填写 / 无法解析'
+        : (r.budget >= 10000 ? (r.budget/10000) + ' 万元' : r.budget + ' 元')
+          + (r.budgetFromText ? ' · 正文识别' : '');
+    $('k-bud').style.color = '';
+  }
   $('k-act').textContent  = ACT[r.intent];
   $('k-rev').textContent  = r.intent === 'spam' ? '—' : (r.needsReview ? '需要' : '不需要');
 
