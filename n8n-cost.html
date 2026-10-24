@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How much does n8n actually cost? (2026, with real numbers)</title>
+<style>
+:root{--ink:#1a1d24;--dim:#5d6470;--line:#e3e6ec;--bg:#fbfcfd;--acc:#2f6fb0}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif}
+.wrap{max-width:720px;margin:0 auto;padding:56px 22px 96px}
+h1{font-size:2em;line-height:1.25;margin:0 0 .5em;letter-spacing:-.02em}
+h2{font-size:1.35em;margin:2.2em 0 .6em;padding-bottom:.3em;border-bottom:1px solid var(--line)}
+h3{font-size:1.08em;margin:1.6em 0 .4em}
+p{margin:.85em 0}
+a{color:var(--acc);text-decoration:none;border-bottom:1px solid rgba(47,111,176,.3)}
+a:hover{border-bottom-color:var(--acc)}
+blockquote{margin:1.4em 0;padding:.9em 1.1em;background:#eef4fa;border-left:3px solid var(--acc);border-radius:0 4px 4px 0;color:#2c3e50}
+blockquote p{margin:.3em 0}
+table{width:100%;border-collapse:collapse;margin:1.3em 0;font-size:.92em;display:block;overflow-x:auto}
+th,td{padding:.55em .7em;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{background:#f2f5f9;font-weight:600;white-space:nowrap}
+tr:hover td{background:#f8fafc}
+code{background:#eef1f5;padding:.15em .4em;border-radius:3px;font-size:.9em;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+pre{background:#1e2430;color:#dfe6ef;padding:1em 1.1em;border-radius:6px;overflow-x:auto;font-size:.88em;line-height:1.6}
+pre code{background:none;padding:0;color:inherit}
+hr{border:0;border-top:1px solid var(--line);margin:2.5em 0}
+em{color:var(--dim)}
+.foot{margin-top:3em;padding-top:1.2em;border-top:1px solid var(--line);font-size:.9em;color:var(--dim)}
+@media(prefers-color-scheme:dark){
+ body{--ink:#e6e9ef;--dim:#9aa3b2;--line:#2b3240;--bg:#14171d}
+ th{background:#1c222c} tr:hover td{background:#1a2029}
+ code{background:#222936} blockquote{background:#1a2532;color:#c8d4e2}
+ pre{background:#0e1116}
+}
+</style></head><body><div class="wrap">
+<h1>How much does n8n actually cost? (2026, with real numbers)</h1>
+<p>Most posts answering this just screenshot n8n's pricing page. That's not the question people are asking. The question is <em>"what will this cost me, in total, once it's running?"</em></p>
+<p>I self-host n8n and run a production workflow on it. Here's the real bill.</p>
+<blockquote>
+<p><strong>TL;DR</strong> — Under ~3,000 executions/month and no LLM calls, self-hosting costs <strong>almost nothing</strong> (a $8/month VPS, or $0 on hardware you already own). The honest answer is that n8n's own licence is never the expensive part. Your time is.</p>
+</blockquote>
+<hr />
+<h2>The official prices (October 2026)</h2>
+<table>
+<thead>
+<tr>
+<th>Plan</th>
+<th>Price</th>
+<th>Executions</th>
+<th>Who it's for</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Community</strong> (self-hosted)</td>
+<td><strong>Free</strong></td>
+<td>Unlimited</td>
+<td>Anyone who can run Docker</td>
+</tr>
+<tr>
+<td>Cloud Starter</td>
+<td>€20/mo (billed annually)</td>
+<td>2,500</td>
+<td>Don't want to touch a server</td>
+</tr>
+<tr>
+<td>Cloud Pro</td>
+<td>€50/mo (billed annually)</td>
+<td>Custom</td>
+<td>Solo builders in production</td>
+</tr>
+<tr>
+<td>Cloud Business</td>
+<td>€667/mo</td>
+<td>40,000</td>
+<td>&lt;100 employees, needs SSO</td>
+</tr>
+<tr>
+<td>Enterprise</td>
+<td>Contact sales</td>
+<td>Custom</td>
+<td>Compliance requirements</td>
+</tr>
+</tbody>
+</table>
+<p>Two things the pricing page doesn't tell you:</p>
+<ol>
+<li><strong>Community Edition has no execution limit.</strong> Cloud plans are priced on executions. Self-hosted is priced on hardware. Once you're past a few thousand executions a month, that distinction does all the work.</li>
+<li><strong>"Execution" means a full workflow run</strong>, not a step. n8n doesn't charge per node. A 30-node workflow is one execution.</li>
+</ol>
+<hr />
+<h2>What it actually cost me</h2>
+<p>I run a lead-scoring pipeline: webhook receives a lead → clean → dedupe → score → assign to a rep → append to a daily digest.</p>
+<table>
+<thead>
+<tr>
+<th>Item</th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>n8n Community licence</td>
+<td><strong>€0</strong></td>
+</tr>
+<tr>
+<td>VPS (2 vCPU / 4 GB)</td>
+<td><strong>~$8/month</strong></td>
+</tr>
+<tr>
+<td>Docker</td>
+<td>€0</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>SQLite (bundled) — €0</td>
+</tr>
+<tr>
+<td><strong>LLM API calls</strong></td>
+<td><strong>€0</strong></td>
+</tr>
+<tr>
+<td><strong>Cost per lead scored</strong></td>
+<td><strong>€0</strong></td>
+</tr>
+</tbody>
+</table>
+<p>That last row is the one worth explaining.</p>
+<hr />
+<h2>The part nobody puts in a pricing comparison</h2>
+<p>The pipeline scores leads using a <strong>deterministic rule engine</strong>, not an LLM. So the marginal cost of processing a lead is exactly zero — no tokens, no per-call fee, no rate limits.</p>
+<p>If I'd used an LLM for the same job:</p>
+<table>
+<thead>
+<tr>
+<th>Approach</th>
+<th>Cost per 1,000 leads</th>
+<th>Behaviour</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Rule engine</td>
+<td><strong>€0</strong></td>
+<td>Identical output for identical input</td>
+</tr>
+<tr>
+<td>LLM (small model, 1 call/lead)</td>
+<td>~€0.20–€1.50</td>
+<td>Varies slightly between runs</td>
+</tr>
+<tr>
+<td>LLM (large model, 1 call/lead)</td>
+<td>~€2–€15</td>
+<td>Better on messy language, still non-deterministic</td>
+</tr>
+</tbody>
+</table>
+<p>Per-lead cost looks trivial either way. It stops looking trivial when you multiply by volume, and it stops being defensible at all when a client asks <em>"why did this lead score 62 yesterday and 58 today?"</em></p>
+<p><strong>Decision rule I use:</strong>
+- If the task needs <em>judgment on unstructured language</em> → LLM.
+- If the task needs <em>a consistent, auditable decision</em> → rules. Use the LLM only to pre-classify into buckets the rules then handle.</p>
+<p>Most "AI automation" projects I've seen are the second kind mislabelled as the first.</p>
+<hr />
+<h2>Self-host vs Cloud: the actual break-even</h2>
+<p>Cloud Starter: €20/month for 2,500 executions = <strong>€0.008/execution</strong>.</p>
+<p>A $8/month VPS handles far more than 2,500 executions if your workflows aren't doing heavy compute. So:</p>
+<table>
+<thead>
+<tr>
+<th>Your monthly executions</th>
+<th>Cheaper option</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>&lt; 500</td>
+<td><strong>Cloud Starter</strong> — €20 vs ~€8, but zero maintenance</td>
+</tr>
+<tr>
+<td>500 – 3,000</td>
+<td>Roughly a wash. Cloud if you value your time, self-host if you don't mind a server.</td>
+</tr>
+<tr>
+<td>&gt; 3,000</td>
+<td><strong>Self-hosted</strong>, clearly</td>
+</tr>
+</tbody>
+</table>
+<p>But there's a hidden line item: <strong>maintenance</strong>. A self-hosted instance needs backups, updates, TLS, and someone to notice when it stops. If you're not comfortable with that, the €20 is genuinely good value — I'm not going to pretend otherwise to make self-hosting look clever.</p>
+<hr />
+<h2>The real cost isn't the licence</h2>
+<p>My actual time breakdown building one production workflow:</p>
+<table>
+<thead>
+<tr>
+<th>Task</th>
+<th>Time</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Building the workflow itself</td>
+<td>~2 hours</td>
+</tr>
+<tr>
+<td>Debugging a field-evaluation bug (return values re-evaluated as expressions)</td>
+<td><strong>~3 hours</strong></td>
+</tr>
+<tr>
+<td>Debugging a webhook conflict from an old duplicate workflow</td>
+<td><strong>~2 hours</strong></td>
+</tr>
+<tr>
+<td>Fixing a currency parser that read a phone number as a budget</td>
+<td>~1 hour</td>
+</tr>
+<tr>
+<td>Writing the regression tests</td>
+<td>~1 hour</td>
+</tr>
+<tr>
+<td><strong>Total</strong></td>
+<td><strong>~9 hours</strong></td>
+</tr>
+</tbody>
+</table>
+<p>At a modest $25/hour, that's <strong>$225 of time</strong> to build a workflow that costs €0/month to run.</p>
+<p>The licence was never the problem. <strong>The debugging was.</strong></p>
+<hr />
+<h2>Three things that will cost you more than the subscription</h2>
+<p><strong>1. Silent failures.</strong> A node starts returning null. Nothing errors. Three weeks later your CRM is full of blanks. Budget for error workflows from day one — an error branch that posts to a channel you actually read.</p>
+<p><strong>2. Duplicate workflows.</strong> In older n8n versions, importing a workflow creates a <em>new</em> ID and leaves the old one running. Two workflows listening on the same webhook path: whichever registered first wins. You edit workflow #4, workflow #1 serves the traffic, and nothing you change has any effect. This cost me two hours.</p>
+<p><strong>3. No tests.</strong> Without a handful of fixed input/expected-output cases, every change is a gamble. Mine is a 30-line script that POSTs to the webhook and compares the output. That's enough.</p>
+<hr />
+<h2>Quick answers</h2>
+<p><strong>Is n8n free?</strong>
+Community Edition is free and unlimited on executions. You pay for the server.</p>
+<p><strong>Is it cheaper than Zapier?</strong>
+For volume, yes — dramatically. Zapier prices per task; n8n self-hosted prices per server. At 10,000+ tasks/month the difference is an order of magnitude. At 200 tasks/month, Zapier's convenience may genuinely be worth it.</p>
+<p><strong>Do I need a credit card to start?</strong>
+No. <code>docker run</code> and you're going.</p>
+<p><strong>What's the minimum server?</strong>
+2 vCPU / 4 GB is comfortable for small workloads. 1 GB works for testing.</p>
+<p><strong>What about the LLM costs?</strong>
+Only if you choose to call an LLM. The platform itself never requires one.</p>
+<hr />
+<h2>The honest summary</h2>
+<table>
+<thead>
+<tr>
+<th></th>
+<th>Cost</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Licence</td>
+<td>€0</td>
+</tr>
+<tr>
+<td>Infrastructure</td>
+<td>€0–8/month</td>
+</tr>
+<tr>
+<td>Per-execution marginal cost</td>
+<td>€0</td>
+</tr>
+<tr>
+<td><strong>Your time to build it properly</strong></td>
+<td><strong>The actual expense</strong></td>
+</tr>
+</tbody>
+</table>
+<p>If someone quotes you a big number for "n8n licensing", they're either selling Cloud Business or they haven't looked. The money in this category isn't in the platform — it's in the nine hours of debugging that the platform's documentation doesn't prepare you for.</p>
+<hr />
+<p><em>I build these workflows and publish the tests. The lead-scoring pipeline referenced above is open: <a href="https://github.com/yff124/lead-scorer">github.com/yff124/lead-scorer</a> — live demo at <a href="https://yff124.github.io/lead-scorer/">yff124.github.io/lead-scorer</a>.</em></p>
+<div class="foot">Written October 2026 · numbers from an actual self-hosted instance, not a pricing page.</div>
+</div></body></html>
