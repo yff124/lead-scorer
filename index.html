@@ -145,6 +145,7 @@
       <div class="kv">
         <div><div class="k">识别行业</div><div class="v" id="k-ind">—</div></div>
         <div><div class="k">解析预算</div><div class="v" id="k-bud">—</div></div>
+        <div><div class="k">正文里的联系方式</div><div class="v" id="k-contact">—</div></div>
         <div><div class="k">建议动作</div><div class="v" id="k-act">—</div></div>
         <div><div class="k">是否人工复核</div><div class="v" id="k-rev">—</div></div>
       </div>
@@ -178,6 +179,50 @@ function parseBudget(v){
   return n > 0 ? n : null;
 }
 
+// 从留言正文里抠预算。真实客户极少填分项框，
+// 都是在正文里顺手写一句"预算5万左右""大概15k""两三万"。
+function extractBudgetFromText(text){
+  if(!text) return null;
+  const s = String(text).replace(/,/g,'').replace(/[¥￥]/g,'');
+  // 优先级：带"预算/报价/费用/价格"等锚点词的，避免把"8个车间"当预算
+  const anchored = /(?:预算|报价|费用|价格|价位|出价|准备|投入|能出|大概|最多|不超过|控制在|范围)[^0-9]{0,6}(\d+(?:\.\d+)?)\s*(万|w|千|k|元|块)?/i;
+  const m1 = s.match(anchored);
+  if(m1){
+    const num = parseFloat(m1[1]);
+    const unit = (m1[2] || '').toLowerCase();
+    let mult = 1;
+    if(unit === '万' || unit === 'w') mult = 10000;
+    else if(unit === '千' || unit === 'k') mult = 1000;
+    else if(!unit){
+      // 没单位且数值很大，按元处理；很小（如 15）大概率是"万"的省略，按千算
+      mult = num >= 1000 ? 1 : 1000;
+    }
+    const n = Math.round(num * mult);
+    if(n > 0) return n;
+  }
+  // 兜底：正文里出现 "5万" "15k" "3千" 这种明确带单位的
+  const m2 = s.match(/(\d+(?:\.\d+)?)\s*(万|w|千|k)(?![a-z])/i);
+  if(m2){
+    const num = parseFloat(m2[1]);
+    const unit = m2[2].toLowerCase();
+    return Math.round(num * (unit === '万' || unit === 'w' ? 10000 : 1000));
+  }
+  return null;
+}
+
+// 从正文里找手机号 / 邮箱 / 微信号
+function extractContacts(text){
+  const t = String(text || '');
+  const phone = t.match(/1[3-9]\d{9}/);
+  const email = t.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
+  const wechat = t.match(/(?:微信|vx|v信|威信|加我)\s*[:：]?\s*([a-zA-Z][-_a-zA-Z0-9]{5,19})/i);
+  return {
+    phone: phone ? phone[0] : null,
+    email: email ? email[0] : null,
+    wechat: wechat ? wechat[1] : null
+  };
+}
+
 function evaluate(d){
   const text = ((d.message||'') + ' ' + (d.name||'')).toLowerCase();
   const out = { steps: [], reasons: [], score: 0 };
@@ -192,6 +237,12 @@ function evaluate(d){
   if(!out.spam && (d.email||'').split('@')[1] === 'mailinator.com') out.spam = '一次性邮箱';
 
   out.budget = parseBudget(d.budget);   // 先解析，spam 分支也要有值
+  out.budgetFromText = false;
+  if(out.budget === null){
+    const fromText = extractBudgetFromText(d.message);
+    if(fromText !== null){ out.budget = fromText; out.budgetFromText = true; }
+  }
+  out.contacts = extractContacts(d.message);
   out.industry = null;
 
   if(out.spam){
@@ -216,13 +267,13 @@ function evaluate(d){
     out.steps.push({lab:'意向词', val:0});
   }
 
-  // 预算
-  const b = parseBudget(d.budget);
-  out.budget = b;
+  // 预算：输入框优先，没有就用正文里抠的
+  const b = out.budget;
+  const budSrc = out.budgetFromText ? '（正文中识别）' : '';
   if(b !== null){
-    if(b >= 5000){ out.score += 25; out.reasons.push('预算明确 ≥5000 元（' + b + ' 元）'); out.steps.push({lab:'预算充足', val:25}); }
-    else if(b >= 1000){ out.score += 15; out.reasons.push('预算 1000–5000 元（' + b + ' 元）'); out.steps.push({lab:'预算中等', val:15}); }
-    else { out.score += 5; out.reasons.push('预算偏低（' + b + ' 元）'); out.steps.push({lab:'预算偏低', val:5}); }
+    if(b >= 5000){ out.score += 25; out.reasons.push('预算明确 ≥5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算充足', val:25}); }
+    else if(b >= 1000){ out.score += 15; out.reasons.push('预算 1000–5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算中等', val:15}); }
+    else { out.score += 5; out.reasons.push('预算偏低（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算偏低', val:5}); }
   } else {
     out.steps.push({lab:'预算', val:0});
   }
@@ -236,10 +287,15 @@ function evaluate(d){
   if(ind){ out.score += 15; out.reasons.push('目标行业：' + ind); out.steps.push({lab:'行业匹配', val:15}); }
   else out.steps.push({lab:'行业', val:0});
 
-  // 完整度
-  const filled = ['name','email','phone','message'].filter(k => d[k] && String(d[k]).trim()).length;
+  // 完整度：分项框 + 正文里识别到 都算
+  const hasName  = !!(d.name  && String(d.name).trim());
+  const hasEmail = !!(d.email && String(d.email).trim()) || !!out.contacts.email;
+  const hasPhone = !!(d.phone && String(d.phone).trim()) || !!out.contacts.phone || !!out.contacts.wechat;
+  const hasMsg   = !!(d.message && String(d.message).trim());
+  const filled = [hasName, hasEmail, hasPhone, hasMsg].filter(Boolean).length;
   if(filled === 4){ out.score += 10; out.reasons.push('四项联系方式齐全'); out.steps.push({lab:'信息完整', val:10}); }
   else if(filled <= 1){ out.score -= 20; out.reasons.push('联系方式严重缺失'); out.steps.push({lab:'信息缺失', val:-20, neg:true}); }
+  else if(!hasPhone && !hasEmail){ out.score -= 10; out.reasons.push('留了需求但没留联系方式'); out.steps.push({lab:'缺联系方式', val:-10, neg:true}); }
   else out.steps.push({lab:'信息完整度', val:0});
 
   if((d.message||'').length < 10){
@@ -289,9 +345,21 @@ function render(d){
 
   $('k-ind').textContent = r.industry || '未识别';
   $('k-bud').textContent  = r.budget === null ? '未填写 / 无法解析'
-      : (r.budget >= 10000 ? (r.budget/10000) + ' 万元' : r.budget + ' 元');
+      : (r.budget >= 10000 ? (r.budget/10000) + ' 万元' : r.budget + ' 元')
+        + (r.budgetFromText ? ' · 正文识别' : '');
   $('k-act').textContent  = ACT[r.intent];
   $('k-rev').textContent  = r.intent === 'spam' ? '—' : (r.needsReview ? '需要' : '不需要');
+
+  // 正文里自动识别到的联系方式，单独显示，让人知道"系统真的看了内容"
+  const c = r.contacts || {};
+  const found = [];
+  if(c.phone) found.push('手机 ' + c.phone);
+  if(c.email) found.push('邮箱 ' + c.email);
+  if(c.wechat) found.push('微信 ' + c.wechat);
+  if($('k-contact')){
+    $('k-contact').textContent = found.length ? found.join(' / ') : '未在正文中找到';
+    $('k-contact').style.color = found.length ? '#1e7a3c' : '#8b93a3';
+  }
 
   // 分数条
   const maxAbs = Math.max(45, ...r.steps.map(s => Math.abs(s.val)));
