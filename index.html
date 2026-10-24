@@ -414,9 +414,12 @@ function evaluate(d){
   // 名+电话+留言 三项齐，成交信息其实已经够了，不该卡在"必须四项"
   if(filled >= 3){ out.score += 10; out.reasons.push('联系方式齐全（' + filled + '/4 项）'); out.steps.push({lab:'信息完整', val:10}); }
   else if(!hasPhone && !hasEmail){
-    const penalty = hitHigh.length ? -5 : -15;
+    // 中等意向也算"有明确需求"：30 + 15(行业) 被 -15 一扣，正好卡在 30 掉进 cold，
+    // 但"问了案例和功能"的客户显然不是路过的。所以只对"完全没意向词"重扣。
+    const penalty = hitHigh.length ? -5 : (hitMid.length ? -8 : -15);
     out.score += penalty;
-    out.reasons.push(hitHigh.length ? '还没留联系方式（但意向明确，优先回他）' : '留了需求但没留联系方式');
+    out.reasons.push(hitHigh.length ? '还没留联系方式（但意向明确，优先回他）'
+      : (hitMid.length ? '没留联系方式（在问了，值得追一句）' : '留了需求但没留联系方式'));
     out.steps.push({lab:'缺联系方式', val:penalty, neg:true});
   }
   else out.steps.push({lab:'信息完整度', val:0});
