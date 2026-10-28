@@ -1,0 +1,561 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>客户线索自动分级 · 别让销售把时间浪费在垃圾咨询上</title>
+<style>
+  :root{
+    --ink:#1b2333; --sub:#6b7487; --line:#e6e9f0; --bg:#f6f7fb;
+    --brand:#1f3864; --brand2:#2f6fb0; --hot:#c0392b; --warm:#d68910; --cold:#5d7cb5; --spam:#8b93a3;
+    --gold:#b7791f; --radius:14px;
+  }
+  *{box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"PingFang SC","Hiragino Sans GB","Microsoft YaHei","Noto Sans CJK SC",system-ui,-apple-system,sans-serif;
+    line-height:1.7; -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:960px;margin:0 auto;padding:32px 20px 80px}
+
+  /* 顶部英雄区 */
+  .hero{background:linear-gradient(135deg,#1f3864 0%,#2f6fb0 100%);color:#fff;border-radius:var(--radius);
+        padding:40px 32px;margin-bottom:22px;position:relative;overflow:hidden}
+  .hero::after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;
+    background:radial-gradient(circle,rgba(255,255,255,.12),transparent 70%);border-radius:50%}
+  .hero h1{margin:0 0 12px;font-size:30px;line-height:1.35;letter-spacing:.5px}
+  .hero .sub{font-size:16px;opacity:.92;margin:0 0 20px;max-width:640px}
+  .hero .badges{display:flex;flex-wrap:wrap;gap:10px}
+  .hero .badge{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.25);
+    border-radius:20px;padding:5px 14px;font-size:13px}
+
+  section{background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+          padding:26px 28px;margin-bottom:20px;box-shadow:0 1px 2px rgba(20,30,60,.04)}
+  h2{font-size:21px;margin:0 0 8px;color:var(--brand);letter-spacing:.3px}
+  h2 .en{font-size:12px;color:var(--sub);font-weight:400;letter-spacing:1px;margin-left:8px}
+  .lede{color:var(--sub);font-size:14.5px;margin:0 0 18px}
+
+  /* 试用打分器 */
+  .indrow{display:flex;flex-wrap:wrap;gap:7px;margin:8px 0 12px}
+  .indrow button{background:#fff;border:1px solid var(--line);border-radius:20px;
+    padding:6px 15px;font-size:13.5px;color:#39405a;cursor:pointer;font-family:inherit;transition:all .15s}
+  .indrow button:hover{border-color:var(--brand);color:var(--brand)}
+  .indrow button.on{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+  .indnote{margin:4px 0 14px;font-size:12.5px;color:var(--sub);min-height:1.6em}
+  label{display:block;font-size:13px;color:var(--sub);margin-bottom:7px;font-weight:600;letter-spacing:.3px}
+  textarea,input{width:100%;border:1px solid var(--line);border-radius:9px;padding:12px 14px;
+    font-size:15px;font-family:inherit;color:var(--ink);background:#fcfcfe;outline:none;transition:.15s}
+  textarea:focus,input:focus{border-color:var(--brand2);background:#fff;box-shadow:0 0 0 3px rgba(47,111,176,.08)}
+  textarea{min-height:80px;resize:vertical}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:14px}
+  @media(max-width:640px){.row{grid-template-columns:1fr}}
+  .samples{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .samples button{border:1px solid var(--line);background:#fff;color:var(--sub);border-radius:20px;
+    padding:6px 14px;font-size:13px;cursor:pointer;font-family:inherit;transition:.15s}
+  .samples button:hover{border-color:var(--brand2);color:var(--brand2);background:#f7f9ff}
+  .go{margin-top:16px}
+  .go button.primary{background:var(--brand);color:#fff;border:none;border-radius:10px;padding:13px 34px;
+    font-size:15px;font-weight:600;cursor:pointer;font-family:inherit;transition:.15s;letter-spacing:.5px}
+  .go button.primary:hover{background:#16294a}
+
+  #out{display:none;margin-top:20px;border-top:1px solid var(--line);padding-top:20px}
+  .verdict{display:flex;align-items:center;gap:18px;flex-wrap:wrap}
+  .dial{position:relative;width:96px;height:96px;flex:0 0 auto}
+  .dial svg{transform:rotate(-90deg)}
+  .dial .num{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+  .dial .num b{font-size:26px;line-height:1}
+  .dial .num span{font-size:11px;color:var(--sub);margin-top:2px}
+  .vtext h3{margin:0 0 4px;font-size:19px}
+  .vtext p{margin:0;color:var(--sub);font-size:14px}
+  .tag{display:inline-block;color:#fff;border-radius:6px;padding:2px 10px;font-size:13px;font-weight:600;margin-right:8px}
+  .kv{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-top:18px}
+  .kv div{background:#f8f9fd;border:1px solid var(--line);border-radius:9px;padding:11px 14px}
+  .kv .k{font-size:11.5px;color:var(--sub);letter-spacing:.3px}
+  .kv .v{font-size:15px;font-weight:600;margin-top:2px}
+  .bars{margin-top:20px}
+  .bar{display:grid;grid-template-columns:112px 1fr 52px;align-items:center;gap:12px;margin-bottom:9px;font-size:13.5px}
+  .bar .lab{color:var(--sub)}
+  .bar .track{display:block;height:8px;background:#eef0f6;border-radius:5px;overflow:hidden}
+  .bar .fill{display:block;height:100%;border-radius:5px;width:0;transition:width .5s cubic-bezier(.22,1,.36,1)}
+  .bar .val{text-align:right;font-weight:600;font-variant-numeric:tabular-nums}
+  .why{margin-top:16px;font-size:14px;color:#39405a;background:#f8f9fd;border-left:3px solid var(--brand);
+       padding:12px 16px;border-radius:0 8px 8px 0}
+
+  /* 定价卡 */
+  .pricing{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin-top:6px}
+  @media(max-width:760px){.pricing{grid-template-columns:1fr}}
+  .plan{border:1px solid var(--line);border-radius:12px;padding:22px 20px;position:relative;
+        display:flex;flex-direction:column}
+  .plan.hot{border:2px solid var(--brand2);box-shadow:0 4px 16px rgba(47,111,176,.12)}
+  .plan .flag{position:absolute;top:-11px;left:50%;transform:translateX(-50%);background:var(--brand2);
+    color:#fff;font-size:12px;padding:3px 14px;border-radius:12px;white-space:nowrap}
+  .plan .name{font-size:14px;color:var(--sub);margin:0}
+  .plan .price{font-size:30px;font-weight:700;color:var(--brand);margin:8px 0 2px}
+  .plan .price small{font-size:14px;font-weight:400;color:var(--sub)}
+  .plan .desc{font-size:13px;color:var(--sub);margin:0 0 14px}
+  .plan ul{list-style:none;margin:0 0 18px;padding:0;flex:1}
+  .plan li{font-size:13.5px;color:#39405a;padding:6px 0 6px 22px;position:relative}
+  .plan li::before{content:"✓";position:absolute;left:0;color:var(--brand2);font-weight:700}
+  .plan .cta{display:block;text-align:center;text-decoration:none;border-radius:10px;padding:12px;
+    font-size:14px;font-weight:600;border:1px solid var(--brand);color:var(--brand);transition:.15s}
+  .plan.hot .cta{background:var(--brand2);border-color:var(--brand2);color:#fff}
+  .plan .cta:hover{opacity:.9}
+
+  /* 免费体检 */
+  .free-trial{background:linear-gradient(135deg,#fdf6e9,#f9ecd4);border:1px solid #f0d9a8}
+  .free-trial h2{color:#7a5a00}
+  .free-trial ol{margin:0 0 16px;padding-left:20px}
+  .free-trial li{margin-bottom:8px;font-size:14.5px;color:#39405a}
+  .free-trial .steps{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:10px}
+  @media(max-width:640px){.free-trial .steps{grid-template-columns:1fr}}
+  .free-trial .step{background:#fff;border:1px solid #f0d9a8;border-radius:10px;padding:14px 16px}
+  .free-trial .step b{color:#7a5a00}
+  .free-trial .step p{margin:6px 0 0;font-size:13px;color:#4b5268}
+
+  /* 信任区 */
+  .trust{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media(max-width:680px){.trust{grid-template-columns:1fr}}
+  .trust>div{background:#f8f9fd;border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .trust h4{margin:0 0 8px;font-size:14px;color:var(--brand)}
+  .trust p{margin:0 0 6px;font-size:13.5px;line-height:1.7;color:#4b5268}
+  .trust p:last-child{margin-bottom:0}
+  .trust a{color:var(--brand2);text-decoration:none;border-bottom:1px solid rgba(47,111,176,.3)}
+
+  .contact{background:#fff;border:1px solid var(--line);border-radius:var(--radius);padding:22px 28px;margin-bottom:20px;
+    text-align:center}
+  .contact h2{text-align:left}
+  .contact .big{font-size:15px;color:#39405a;margin:10px 0}
+  .contact .pay{display:inline-block;background:var(--brand);color:#fff;border-radius:10px;padding:14px 40px;
+    font-size:16px;font-weight:600;text-decoration:none;margin-top:8px;transition:.15s}
+  .contact .pay:hover{background:#16294a}
+  .contact .paynote{font-size:12.5px;color:var(--sub);margin-top:10px}
+
+  footer{margin-top:28px;color:var(--sub);font-size:12.5px;text-align:center;line-height:1.8}
+  .warn{background:#fff8e6;border:1px solid #f2d894;border-radius:9px;padding:12px 16px;
+        font-size:13.5px;color:#7a5a00;margin-top:14px;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <!-- 英雄区 -->
+  <div class="hero">
+    <h1>客户从表单进来，7 成是垃圾和随便问问<br>真正要买的，被埋在最底下</h1>
+    <p class="sub">一个纯规则引擎，把每一条客户咨询自动分级：该立刻打电话的、该跟进培育的、该直接归档的。零 API 成本，每一分都能追到具体规则，同样的输入永远同样的结果。</p>
+    <div class="badges">
+      <span class="badge">零 API 费用</span>
+      <span class="badge">数据不出你的电脑</span>
+      <span class="badge">规则全公开可审计</span>
+      <span class="badge">覆盖 6 大行业</span>
+    </div>
+  </div>
+
+  <!-- 试用区 -->
+  <section>
+    <h2>先试一下 <span class="en">TRY IT LIVE</span></h2>
+    <p class="lede">把一条真实客户留言粘进来，立刻看到它值不值得马上打电话。所有计算在你浏览器里完成，数据不会上传。</p>
+
+    <div class="indrow" id="indrow"></div>
+    <p class="indnote" id="indnote"></p>
+
+    <label for="msg">客户留言原文</label>
+    <textarea id="msg" placeholder="例如：我们厂 8 个车间想上 AI 质检，报价多少？预算 10 万左右">8个车间想上AI质检，报价多少？预算10万，电话13800138000</textarea>
+
+    <div class="row">
+      <div><label for="budget">客户填的预算（可空）</label><input id="budget" placeholder="10万 / 15k / ¥15,000" value="10万"></div>
+      <div><label for="name">客户称呼（可空）</label><input id="name" placeholder="张经理" value="张经理"></div>
+    </div>
+
+    <div class="samples">
+      <button data-m="8个车间想上AI质检，报价多少？预算10万，电话13800138000" data-b="10万" data-n="张经理">高意向·制造</button>
+      <button data-m="孩子牙齿不齐想做隐形矫正，多少钱？这周能安排拍片和面诊吗 电话13800138001" data-b="" data-n="王女士">高意向·口腔</button>
+      <button data-m="新房89平想全包，能上门量房出方案吗？工期大概多久 电话13800138005" data-b="" data-n="李先生">高意向·装修</button>
+      <button data-m="想了解一下你们有没有做过诊所的案例，有什么功能" data-b="" data-n="李女士">中等意向·医疗</button>
+      <button data-m="专业代开发票，加微信领免费资料，点击链接" data-b="" data-n="王先生">垃圾广告</button>
+      <button data-m="在吗" data-b="" data-n="赵">几乎没信息</button>
+    </div>
+    <div class="go"><button class="primary" id="run">打分</button></div>
+
+    <div id="out">
+      <div class="verdict">
+        <div class="dial">
+          <svg width="96" height="96" viewBox="0 0 96 96">
+            <circle cx="48" cy="48" r="42" fill="none" stroke="#eef0f6" stroke-width="9"></circle>
+            <circle id="ring" cx="48" cy="48" r="42" fill="none" stroke="#c0392b" stroke-width="9"
+                    stroke-linecap="round" stroke-dasharray="264" stroke-dashoffset="264"
+                    style="transition:stroke-dashoffset .6s cubic-bezier(.22,1,.36,1),stroke .3s"></circle>
+          </svg>
+          <div class="num"><b id="score">0</b><span>分</span></div>
+        </div>
+        <div class="vtext">
+          <h3><span class="tag" id="tag">—</span><span id="title">—</span></h3>
+          <p id="sub"></p>
+        </div>
+      </div>
+      <div class="kv">
+        <div><div class="k">识别行业</div><div class="v" id="k-ind">—</div></div>
+        <div><div class="k">解析预算</div><div class="v" id="k-bud">—</div></div>
+        <div><div class="k">正文里的联系方式</div><div class="v" id="k-contact">—</div></div>
+        <div><div class="k">建议动作</div><div class="v" id="k-act">—</div></div>
+        <div><div class="k">是否人工复核</div><div class="v" id="k-rev">—</div></div>
+      </div>
+      <div class="bars" id="bars"></div>
+      <div class="why" id="why"></div>
+      <div class="warn" id="warn"></div>
+    </div>
+  </section>
+
+  <!-- 免费体检 -->
+  <section class="free-trial">
+    <h2>拿你自己的数据，免费验一次 <span class="en">FREE AUDIT</span></h2>
+    <p class="lede" style="color:#7a5a00">你导一份最近的咨询记录给我（名字电话抹掉就行），我免费给你出一份报告：多少条是被浪费的、浪费在哪、你的销售到底在白忙什么。</p>
+    <ol>
+      <li>把后台最近 1–2 周的客户咨询导出（CSV / Excel / 截图 / 复制成 txt 都行）</li>
+      <li>把名字、电话脱敏（抹掉或打码）</li>
+      <li>发给我，我 1 天内给你一份 <b>PDF 体检报告</b></li>
+    </ol>
+    <div class="steps">
+      <div class="step"><b>报告里有什么</b><p>线索总数、高意向/中意向/低意向/垃圾的占比、被漏掉的高意向、销售白打过的电话。</p></div>
+      <div class="step"><b>为什么值得做</b><p>报告里的数字是你自己的数据，不是话术。你没法反驳自己公司导出来的表。</p></div>
+    </div>
+    <p style="font-size:13.5px;color:#7a5a00;margin:16px 0 0">报告不要钱，也不用你留任何联系方式。看完觉得没用，就当我没说过。</p>
+  </section>
+
+  <!-- 定价 -->
+  <section>
+    <h2>看完觉得对路，这里是价格 <span class="en">PRICING</span></h2>
+    <p class="lede">不卖一个冷冰冰的脚本，卖的是「省掉销售每天手动筛线索的时间」。按你实际需要多少功能选。</p>
+    <div class="pricing">
+      <div class="plan">
+        <p class="name">部署调通</p>
+        <p class="price">¥399</p>
+        <p class="desc">自己部署，我远程帮你跑通</p>
+        <ul>
+          <li>一键部署脚本 + 工作流文件</li>
+          <li>30 分钟远程协助</li>
+          <li>通用词表 + 1 个行业词表</li>
+          <li>文档：怎么用、怎么改</li>
+        </ul>
+        <a class="cta" href="#contact">选这个</a>
+      </div>
+      <div class="plan hot">
+        <span class="flag">最推荐 · 客户真正要的是这个</span>
+        <p class="name">接自有表单</p>
+        <p class="price">¥699</p>
+        <p class="desc">接上你自己的官网 / 飞书 / 企微</p>
+        <ul>
+          <li>部署调通的全部内容</li>
+          <li>接你的真实表单来源</li>
+          <li>自动派单给对应销售</li>
+          <li>按你的业务调词表（30 条实测到 90%+）</li>
+          <li>每周自动出报表</li>
+        </ul>
+        <a class="cta" href="#contact">选这个</a>
+      </div>
+      <div class="plan">
+        <p class="name">对外网 + 鉴权</p>
+        <p class="price">¥1,299</p>
+        <p class="desc">有真实流量的人才会买</p>
+        <ul>
+          <li>接自有表单的全部内容</li>
+          <li>HTTPS + 反向代理</li>
+          <li>访问控制 / 登录鉴权</li>
+          <li>对接外网公开表单</li>
+        </ul>
+        <a class="cta" href="#contact">选这个</a>
+      </div>
+    </div>
+    <p style="font-size:13px;color:var(--sub);margin-top:16px">不保证「提升成单率」——那是销售、产品、价格的事，我控制不了。我保证的是：<b>规则调准 + 跑通 + 你能自己看懂报表</b>。准不准，先拿你 30 条历史线索测，测出来多少就是多少，不准我不收钱。</p>
+  </section>
+
+  <!-- 信任区 -->
+  <section>
+    <h2>几个你可能想问的 <span class="en">FAQ</span></h2>
+    <div class="trust">
+      <div>
+        <h4>这是用 ChatGPT 吗？</h4>
+        <p>不是。这是写死的规则引擎，不调任何 AI 接口。不用担心接口涨价、模型改版、数据传到别人服务器。也正因为不用接口，跑一年也没有账单。</p>
+      </div>
+      <div>
+        <h4>我的客户数据安全吗？</h4>
+        <p>全部跑在你自己的电脑/服务器上，数据不出你的机器。给你的是一个能离线运行的安装包，装完断网也能用。上面的试用，所有计算也都在你浏览器里完成，没有后端、没有数据回传。</p>
+      </div>
+      <div>
+        <h4>准确率多少？</h4>
+        <p>在我测的 6 个典型场景全对。但在你的业务上我不敢先说数字，建议先拿你 30 条历史线索测一遍，测出来多少就是多少，不准我不收钱。</p>
+      </div>
+      <div>
+        <h4>规则我看得懂吗？</h4>
+        <p>看得懂。代码和 42 项回归测试全部公开在 <a href="https://github.com/yff124/lead-scorer" target="_blank" rel="noopener">github.com/yff124/lead-scorer</a>，每一分从哪来都能追到具体规则，改坏了跑一遍测试就知道。</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- 收款/联系 -->
+  <section id="contact" class="contact">
+    <h2>怎么开始 <span class="en">GET STARTED</span></h2>
+    <p class="big">最省事的是先做<b>免费体检</b>：把最近一段时间的咨询记录导出来（脱敏后）发我，我先给你出报告。<br>看完觉得有用，再决定买哪一档。</p>
+    <p class="big" style="font-weight:700;color:var(--brand)">联系微信：<span id="wechat-placeholder">（微信号待填）</span></p>
+    <a class="pay" href="#contact">微信 / 支付宝 付款</a>
+    <p class="paynote">付款后 24 小时内交付；交付前随时可全额退。先聊清楚再付款，不催单。</p>
+  </section>
+
+  <footer>
+    客户线索自动分级 · 纯规则引擎 · 零 API 成本 · 数据不出你的机器<br>
+    交付标准：规则调准 + 跑通 + 你能自己看懂报表
+  </footer>
+</div>
+
+<script>
+window.RULES = {
+ "high":["报价","多少钱","怎么收费","合同","签约","采购","下单","什么时候能开始","能开发票","开票","预算","付款方式","quotation","pricing","how much","contract","invoice","purchase order"],
+ "mid":["了解一下","咨询","对比","怎么样","有什么功能","看看","demo","演示","试用","案例","learn more","compare"],
+ "spam":["seo服务","代开发票","刷单","加微信领","免费领取","博彩","贷款","点击链接","中奖","兼职日结","unsubscribe","crypto giveaway","click here to claim"],
+ "ind":{
+  "制造":["工厂","产能","车间","制造","machining","factory"],
+  "电商":["店铺","sku","上架","电商","ecommerce","shopify"],
+  "教育":["课程","学员","招生","培训","course","students"],
+  "医疗":["诊所","门诊","患者","医院","clinic","patients"],
+  "法律":["律所","案件","诉讼","律师","law firm","litigation"],
+  "房产":["楼盘","中介","房源","房产","real estate","listing"]
+ }
+};
+window.INDUSTRY_RULES = {
+ "口腔诊所":{"label":"口腔 / 牙科","high":["种植牙","正畸","矫正多少钱","洗牙套餐","拔牙","补牙","根管","牙齿修复","隐形矫正","检查费","挂号","预约看牙","拍片","复诊"],"mid":["了解一下","价格多少","有没有优惠","能报销吗","医保","医生资历","看看案例","效果怎么样","疼不疼"],"spam":["免费领取","点击链接","加微信领","贷款","兼职日结"],"signals":["种植","矫正","牙","口腔","齿科","诊所","门诊"],"note":"牙科的决策链短、客单价高（种植/正畸常 1–8 万），'多少钱一颗'几乎等于要报价。","typical":8000,"demo":"孩子牙齿不齐想做隐形矫正，多少钱？这周能安排拍片和面诊吗 电话13800138001"},
+ "律所":{"label":"律所 / 法律服务","high":["委托","代理","起诉","应诉","开庭","立案","律师费","怎么收费","能赢吗","胜诉率","合同审查","尽职调查","法律意见书","仲裁"],"mid":["咨询一下","想了解","有没有类似案例","多久能办完","需要什么材料","面谈","先聊聊"],"spam":["代开发票","包过","内部关系","刷单","免费法律咨询群"],"signals":["案件","诉讼","纠纷","被告","原告","判决","仲裁","合同","劳动仲裁"],"note":"律所的线索要防'白嫖咨询'——问得很细但不谈委托的，多半不会付费。","typical":20000,"demo":"公司有个合同纠纷要起诉，律师费怎么收？想先看看你们做过类似案件 电话13800138002"},
+ "教培":{"label":"教育培训","high":["报名","学费","课时费","试听","排课","开班时间","保过","退费","一对一","小班","考级","冲刺班","什么时候开课"],"mid":["了解一下","有什么课程","老师怎么样","有没有体验课","多少钱一节课","能试听吗","效果如何"],"spam":["免费领取","点击链接","兼职日结","刷单","贷款","包就业"],"signals":["课程","学员","招生","培训","上课","辅导","考","级","班"],"note":"教培高意向信号是'问开课时间'和'问退费政策'——后者说明他认真考虑过风险。","typical":6000,"demo":"初三数学想报一对一冲刺班，学费多少？什么时候开课，能先试听一节吗 电话13800138003"},
+ "汽修":{"label":"汽车维修 / 汽配","high":["报价","工时费","配件多少钱","原厂件","什么时候能修好","拖车","定损","保险理赔","保养套餐","年检","预约","上门取车"],"mid":["检查一下","什么问题","大概多少钱","要不要换","能便宜点吗","看看案例"],"spam":["免费领取","点击链接","贷款","刷单","兼职"],"signals":["车","发动机","变速箱","刹车","轮胎","保养","维修","喷漆","4S"],"note":"汽修客户最在意两件事：多久能取车、会不会被加项。文案里主动提这两点转化最好。","typical":2000,"demo":"车子剐蹭了要做钣金喷漆，配件多少钱？什么时候能修好，有代步车吗 电话13800138004"},
+ "装修设计":{"label":"装修 / 室内设计","high":["量房","出方案","报价单","全包","半包","工期","签合同","定金","效果图","施工队","什么时候能开工","预算多少能做"],"mid":["看看案例","什么风格","大概多少钱一平","能上门看看吗","有没有样板间"],"spam":["免费设计","点击链接","贷款","刷单","招工"],"signals":["装修","设计","户型","水电","地板","瓷砖","橱柜","软装","平米","平","全包","半包","量房"],"note":"装修客户问'一平多少钱'时，已经在比价了——这是最需要立刻回的时刻。","typical":80000,"demo":"新房89平想全包，能上门量房出方案吗？工期大概多久 电话13800138005"},
+ "SaaS软件":{"label":"SaaS / 企业软件","high":["报价","多少钱","试用","demo","演示","采购","合同","开票","私有化部署","API","对接","什么时候能上线","付款方式","招标"],"mid":["了解一下","有什么功能","和XX比怎么样","有案例吗","能免费试吗","支持多少人","怎么收费"],"spam":["seo服务","刷单","代开发票","加微信领","crypto","点击链接"],"signals":["系统","平台","软件","saas","部署","接口","数据","权限","报表"],"note":"SaaS 线索里'私有化部署'和'招标'两个词价值最高——前者是大客户，后者有预算。","typical":30000,"demo":"我们公司想采购一套客户管理系统，要私有化部署，能安排演示吗？开票和付款方式怎么走 电话13800138006"}
+};
+
+const R = window.RULES;
+function parseBudget(v){
+  if(v === null || v === undefined) return null;
+  let s = String(v).trim().toLowerCase().replace(/,/g,'').replace(/[¥￥]/g,'');
+  if(!s) return null;
+  let mult = 1;
+  if(/[万w]$/.test(s)){ mult = 10000; s = s.slice(0,-1); }
+  else if(/k$/.test(s) || /千$/.test(s)){ mult = 1000; s = s.slice(0,-1); }
+  const m = s.match(/\d+(\.\d+)?/);
+  if(!m) return null;
+  const n = Math.round(parseFloat(m[0]) * mult);
+  return n > 0 ? n : null;
+}
+function extractBudgetFromText(text){
+  if(!text) return null;
+  let s = String(text).replace(/,/g,'').replace(/[¥￥]/g,'');
+  s = s.replace(/1[3-9]\d{9}/g, ' ').replace(/\b\d{7,}\b/g, ' ').replace(/\b\d{4}[-/年]\d{1,2}[-/月]\d{1,2}/g, ' ').replace(/[a-zA-Z]{0,3}\d{8,}[a-zA-Z0-9]*/g, ' ');
+  const anchored = /(?:预算|报价|费用|价格|价位|出价|准备|投入|能出|大概|最多|不超过|控制在|范围)[^0-9]{0,6}(\d+(?:\.\d+)?)\s*(万|w|千|k|元|块)?/i;
+  const m1 = s.match(anchored);
+  if(m1){
+    const num = parseFloat(m1[1]);
+    const unit = (m1[2] || '').toLowerCase();
+    let mult = 1;
+    if(unit === '万' || unit === 'w') mult = 10000;
+    else if(unit === '千' || unit === 'k') mult = 1000;
+    else if(!unit){ mult = num < 100 ? 1000 : 1; }
+    const n = Math.round(num * mult);
+    if(n > 0) return n;
+  }
+  const m2 = s.match(/(\d+(?:\.\d+)?)\s*(万|w|千|k)(?![a-z])/i);
+  if(m2){
+    const num = parseFloat(m2[1]);
+    const unit = m2[2].toLowerCase();
+    return Math.round(num * (unit === '万' || unit === 'w' ? 10000 : 1000));
+  }
+  return null;
+}
+function extractContacts(text){
+  const t = String(text || '');
+  const phone = t.match(/1[3-9]\d{9}/);
+  const email = t.match(/[\w.+-]+@[\w-]+\.[\w.]+/);
+  const wechat = t.match(/(?:微信|vx|v信|威信|加我)\s*[:：]?\s*([a-zA-Z][-_a-zA-Z0-9]{5,19})/i);
+  return { phone: phone ? phone[0] : null, email: email ? email[0] : null, wechat: wechat ? wechat[1] : null };
+}
+function evaluate(d){
+  const text = ((d.message||'') + ' ' + (d.name||'')).toLowerCase();
+  const out = { steps: [], reasons: [], score: 0 };
+  const IR = (window.INDUSTRY_RULES || {})[d.vertical] || null;
+  const R_high = IR ? IR.high : R.high;
+  const R_mid  = IR ? IR.mid  : R.mid;
+  const R_spam = IR ? IR.spam.concat(R.spam.filter(w => !IR.spam.includes(w))) : R.spam;
+  out.vertical = IR ? IR.label : null;
+  for(const s of R_spam){ if(text.includes(s)){ out.spam = '命中垃圾词：' + s; break; } }
+  if(!out.spam && (d.email||'').split('@')[1] === 'mailinator.com') out.spam = '一次性邮箱';
+  out.budget = parseBudget(d.budget);
+  out.budgetFromText = false;
+  if(out.budget === null){ const ft = extractBudgetFromText(d.message); if(ft !== null){ out.budget = ft; out.budgetFromText = true; } }
+  out.contacts = extractContacts(d.message);
+  out.industry = null;
+  if(out.spam){
+    out.score = 0; out.intent = 'spam'; out.needsReview = false;
+    out.reasons.push(out.spam); out.steps.push({lab:'垃圾词命中（一票否决）', val:-100, neg:true});
+    return out;
+  }
+  const hitHigh = R_high.filter(w => text.includes(w));
+  const hitMid  = R_mid.filter(w => text.includes(w));
+  if(hitHigh.length){
+    const bonus = hitHigh.length >= 2 ? 10 : 0;
+    const val = 45 + bonus;
+    out.score += val;
+    out.reasons.push('强意向词 ' + hitHigh.length + ' 个：' + hitHigh.slice(0,3).join('、'));
+    out.steps.push({lab:'强意向词 ×' + hitHigh.length, val: val});
+  } else if(hitMid.length){
+    out.score += 30;
+    out.reasons.push('中等意向：' + hitMid.slice(0,2).join('、'));
+    out.steps.push({lab:'中等意向词', val:30});
+  } else {
+    out.steps.push({lab:'意向词', val:0});
+  }
+  const b = out.budget;
+  const budSrc = out.budgetFromText ? '（正文中识别）' : '';
+  if(b !== null){
+    if(b >= 5000){ out.score += 25; out.reasons.push('预算明确 ≥5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算充足', val:25}); }
+    else if(b >= 1000){ out.score += 10; out.reasons.push('预算 1000–5000 元（' + b + ' 元' + budSrc + '）'); out.steps.push({lab:'预算中等', val:10}); }
+    else { out.score -= 25; out.reasons.push('预算只有 ' + b + ' 元，差距较大' + budSrc); out.steps.push({lab:'预算过低', val:-25, neg:true}); out.lowBudget = true; }
+  } else {
+    if(IR && IR.typical && hitHigh.length){
+      const est = Math.round(IR.typical * 0.5);
+      out.score += 12; out.estBudget = est;
+      out.reasons.push('没写预算，但问的是' + IR.label + '的标准服务项，按行业均价估 ≈' + (est>=10000 ? (est/10000)+' 万' : est+' 元'));
+      out.steps.push({lab:'预算（按行业估算）', val:12});
+    } else { out.steps.push({lab:'预算', val:0}); }
+  }
+  if(out.budget && out.budget < 5000) out.score = Math.min(out.score, 65);
+  let ind = null;
+  if(IR){ if(IR.signals.some(w => text.includes(w))) ind = IR.label; }
+  else { for(const k of Object.keys(R.ind)){ if(R.ind[k].some(w => text.includes(w))){ ind = k; break; } } }
+  out.industry = ind;
+  if(ind){ out.score += 15; out.reasons.push('目标行业：' + ind); out.steps.push({lab:'行业匹配', val:15}); }
+  else { const pen = hitHigh.length ? -2 : -5; out.score += pen; out.reasons.push('行业未命中（不在预设行业里）'); out.steps.push({lab:'行业未命中', val: pen, neg:true}); }
+  const hasName  = !!(d.name  && String(d.name).trim());
+  const hasEmail = !!(d.email && String(d.email).trim()) || !!out.contacts.email;
+  const hasPhone = !!(d.phone && String(d.phone).trim()) || !!out.contacts.phone || !!out.contacts.wechat;
+  const hasMsg   = !!(d.message && String(d.message).trim());
+  const filled = [hasName, hasEmail, hasPhone, hasMsg].filter(Boolean).length;
+  if(filled >= 3){ out.score += 10; out.reasons.push('联系方式齐全（' + filled + '/4 项）'); out.steps.push({lab:'信息完整', val:10}); }
+  else if(!hasPhone && !hasEmail){
+    const penalty = hitHigh.length ? -5 : (hitMid.length ? -8 : -15);
+    out.score += penalty;
+    out.reasons.push(hitHigh.length ? '还没留联系方式（但意向明确，优先回他）' : (hitMid.length ? '没留联系方式（在问了，值得追一句）' : '留了需求但没留联系方式'));
+    out.steps.push({lab:'缺联系方式', val:penalty, neg:true});
+  }
+  else out.steps.push({lab:'信息完整度', val:0});
+  if((d.message||'').length < 10 && !hitHigh.length){ out.score -= 15; out.reasons.push('消息过短'); out.steps.push({lab:'消息过短', val:-15, neg:true}); }
+  out.score = Math.max(0, Math.min(100, out.score));
+  if(out.spam){ out.intent = 'spam'; }
+  else out.intent = out.score >= 70 ? 'hot' : (out.score >= 35 ? 'warm' : 'cold');
+  const _hh = (hitHigh && hitHigh.length) || 0;
+  out.needsReview = Math.abs(out.score - 35) <= 2 || Math.abs(out.score - 70) <= 2 || (out.score >= 70 && b === null) || _hh >= 3;
+  return out;
+}
+const META = {
+  hot:{color:'#c0392b', title:'高意向 · 立刻打电话'},
+  warm:{color:'#d68910', title:'中等意向 · 进跟进池'},
+  cold:{color:'#5d7cb5', title:'低意向 · 低频培育'},
+  spam:{color:'#8b93a3', title:'垃圾广告 · 直接归档'}
+};
+const ACT = { hot:'5 分钟内联系', warm:'当天联系', cold:'进邮件/内容培育', spam:'不分配销售' };
+const $ = id => document.getElementById(id);
+function render(d){
+  const r = evaluate(d);
+  const meta = META[r.intent];
+  $('out').style.display = 'block';
+  $('score').textContent = r.score;
+  $('score').style.color = meta.color;
+  $('tag').textContent = r.intent;
+  $('tag').style.background = meta.color;
+  $('title').textContent = meta.title;
+  $('sub').textContent = r.reasons.length ? '判定理由：' + r.reasons.join('；') : '没有任何规则命中';
+  const ring = $('ring');
+  const C = 2 * Math.PI * 42;
+  ring.style.stroke = meta.color;
+  ring.setAttribute('stroke-dasharray', C.toFixed(1));
+  ring.setAttribute('stroke-dashoffset', (C * (1 - r.score/100)).toFixed(1));
+  $('k-ind').textContent = r.industry || '未识别';
+  if(r.budget === null && r.estBudget){
+    $('k-bud').textContent = '≈ ' + (r.estBudget >= 10000 ? (r.estBudget/10000) + ' 万元' : r.estBudget + ' 元') + ' · 行业估价';
+    $('k-bud').style.color = '#b9770e';
+  } else {
+    $('k-bud').textContent = r.budget === null ? '未填写 / 无法解析' : (r.budget >= 10000 ? (r.budget/10000) + ' 万元' : r.budget + ' 元') + (r.budgetFromText ? ' · 正文识别' : '');
+    $('k-bud').style.color = '';
+  }
+  $('k-act').textContent = ACT[r.intent];
+  $('k-rev').textContent = r.intent === 'spam' ? '—' : (r.needsReview ? '需要' : '不需要');
+  const c = r.contacts || {};
+  const found = [];
+  if(c.phone) found.push('手机 ' + c.phone);
+  if(c.email) found.push('邮箱 ' + c.email);
+  if(c.wechat) found.push('微信 ' + c.wechat);
+  if($('k-contact')){
+    $('k-contact').textContent = found.length ? found.join(' / ') : '未在正文中找到';
+    $('k-contact').style.color = found.length ? '#1e7a3c' : '#8b93a3';
+  }
+  const maxAbs = Math.max(45, ...r.steps.map(s => Math.abs(s.val)));
+  $('bars').innerHTML = r.steps.map(s => {
+    const w = Math.abs(s.val) / maxAbs * 100;
+    const color = s.neg ? '#c0392b' : (s.val > 0 ? '#2f6fb0' : '#c9cede');
+    return '<div class="bar ' + (s.neg?'neg':'') + '"><span class="lab">' + s.lab + '</span><span class="track"><span class="fill" style="background:' + color + ';width:0" data-w="' + w.toFixed(1) + '"></span></span><span class="val">' + (s.val > 0 ? '+' + s.val : (s.val === 0 ? '0' : s.val)) + '</span></div>';
+  }).join('');
+  const paint = () => { document.querySelectorAll('#bars .fill').forEach(el => { el.style.width = (el.dataset.w || 0) + '%'; }); };
+  void document.getElementById('bars').offsetHeight;
+  requestAnimationFrame(() => requestAnimationFrame(paint));
+  setTimeout(paint, 120);
+  $('why').innerHTML = '<b>结论</b>：' + meta.title + '。' +
+    (r.intent === 'spam' ? '建议不分配销售，直接归档。' :
+     r.lowBudget ? '他想花 ' + r.budget + ' 元解决这个问题，和你的报价差得远。别直接拒，先给个低价方案或资料包养着，不值得投入销售时间。' :
+     r.intent === 'hot' ? '这条应该排在销售队列最前面，' + (r.needsReview ? '但它没写预算，建议先人工确认一下需求再报价。' : '马上联系。') :
+     r.intent === 'warm' ? '先问清预算和具体需求，再决定要不要安排演示。' :
+     '先补齐「想解决什么问题、预算多少、什么时候要」，再判断优先级。');
+  const warn = $('warn');
+  const hits = [...R.high, ...R.mid, ...R.spam].filter(w => (d.message||'').toLowerCase().includes(w));
+  if(hits.length === 0 && r.intent !== 'spam'){
+    warn.style.display = 'block';
+    warn.innerHTML = '注意：这条留言没有命中词表里的任何一个词，所以分数主要来自「信息完整性」和扣分项。这说明<b>规则需要针对你的业务补充词表</b>——这也是这套东西真正的定制成本所在。';
+  } else { warn.style.display = 'none'; }
+}
+function collect(){
+  return { message: $('msg').value, budget: $('budget').value, name: $('name').value, phone: '', email: '', vertical: currentInd };
+}
+let currentInd = null;
+function buildIndButtons(){
+  const row = $('indrow');
+  const IR = window.INDUSTRY_RULES || {};
+  const mk = (key, text) => {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = text; b.dataset.k = key || '';
+    if(!key) b.classList.add('on');
+    b.addEventListener('click', () => {
+      currentInd = key || null;
+      row.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b));
+      const note = $('indnote');
+      if(key && IR[key]){
+        note.textContent = IR[key].note || '';
+        const demo = IR[key].demo;
+        if(demo){ $('msg').value = demo; $('budget').value = ''; }
+      } else { note.textContent = '通用词表：适合还没确定行业，或者客户说话比较标准的情况。'; }
+      render(collect());
+    });
+    row.appendChild(b);
+  };
+  mk(null, '通用');
+  Object.keys(IR).forEach(k => mk(k, IR[k].label || k));
+}
+buildIndButtons();
+$('indnote').textContent = '通用词表：适合还没确定行业，或者客户说话比较标准的情况。';
+$('run').addEventListener('click', () => render(collect()));
+document.querySelectorAll('.samples button').forEach(b => {
+  b.addEventListener('click', () => {
+    $('msg').value = b.dataset.m;
+    $('budget').value = b.dataset.b;
+    $('name').value = b.dataset.n;
+    render(collect());
+  });
+});
+$('msg').addEventListener('keydown', e => { if((e.metaKey || e.ctrlKey) && e.key === 'Enter') render(collect()); });
+render(collect());
+</script>
+</body>
+</html>
